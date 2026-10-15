@@ -194,7 +194,10 @@ describe('ProviderModels markup', () => {
 describe('model breakdown locales', () => {
   const dashboardKeys = (locale: unknown) =>
     (locale as { dashboard: Record<string, string> }).dashboard;
-  const keys = Object.keys(dashboardKeys(en)).filter((key) => key.startsWith('models_'));
+  // Plural forms beyond `_other` differ per locale (zh/ko/vi have none), so only `_other` is shared.
+  const keys = Object.keys(dashboardKeys(en)).filter(
+    (key) => key.startsWith('models_') && !key.endsWith('_one')
+  );
   const locales = { 'zh-CN': zhCN, 'zh-TW': zhTW, ru, vi, ko };
 
   test('every locale defines every key with the same placeholders', () => {
