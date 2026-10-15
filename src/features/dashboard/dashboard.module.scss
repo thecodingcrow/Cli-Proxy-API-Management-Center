@@ -659,6 +659,14 @@
   height: 5px;
 }
 
+/* ---------- 模型明细：每个供应商一张整宽卡片 ---------- */
+
+.modelStack {
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-md;
+}
+
 /* ---------- 双栏细节区 ---------- */
 
 .detailGrid {

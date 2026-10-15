@@ -18,7 +18,8 @@ import { Meter } from './components/Meter';
 import { Sparkline } from './components/Sparkline';
 import { ThroughputChart } from './components/ThroughputChart';
 import { useCountUp, useRevealGroup, useRevealOnScroll } from '@/hooks/motion';
-import { providerLabel, splitWindowMinutes, toneForSuccessRate, type MeterTone } from './utils';
+import { ProviderModels } from './components/ProviderModels';
+import { formatWindowLabel, providerLabel, toneForSuccessRate, type MeterTone } from './utils';
 import styles from './dashboard.module.scss';
 
 const DASH = '—';
@@ -40,8 +41,17 @@ export function DashboardPage() {
   const serverVersion = useAuthStore((state) => state.serverVersion);
   const serverBuildDate = useAuthStore((state) => state.serverBuildDate);
 
-  const { connectionStatus, connected, config, counts, traffic, providers, credentials, refresh } =
-    useDashboardOverview();
+  const {
+    connectionStatus,
+    connected,
+    config,
+    counts,
+    traffic,
+    providers,
+    modelBreakdown,
+    credentials,
+    refresh,
+  } = useDashboardOverview();
 
   useHeaderRefresh(refresh, connected);
 
@@ -50,18 +60,24 @@ export function DashboardPage() {
   const statsRef = useRevealGroup<HTMLElement>(0.12);
   const trafficRef = useRevealOnScroll<HTMLElement>();
   const fleetRef = useRevealOnScroll<HTMLElement>();
+  const modelsRef = useRevealOnScroll<HTMLElement>();
   const detailRef = useRevealGroup<HTMLElement>();
   const ctaRef = useRevealGroup<HTMLElement>();
 
   const animatedTotal = useCountUp(traffic.total, connected);
 
-  const windowLabel = useMemo(() => {
-    if (traffic.windowMinutes <= 0) return DASH;
-    const { hours, minutes } = splitWindowMinutes(traffic.windowMinutes);
-    if (hours === 0) return t('dashboard.window_m', { minutes });
-    if (minutes === 0) return t('dashboard.window_h', { hours });
-    return t('dashboard.window_hm', { hours, minutes });
-  }, [traffic.windowMinutes, t]);
+  const windowLabel = useMemo(
+    () => formatWindowLabel(traffic.windowMinutes, t, DASH),
+    [traffic.windowMinutes, t]
+  );
+
+  const modelsWindowLabel = useMemo(
+    () =>
+      modelBreakdown && modelBreakdown.windowMinutes > 0
+        ? formatWindowLabel(modelBreakdown.windowMinutes, t, DASH)
+        : windowLabel,
+    [modelBreakdown, windowLabel, t]
+  );
 
   const heroSparkPoints = useMemo(
     () => traffic.buckets.map((bucket) => bucket.success + bucket.failed),
@@ -404,6 +420,26 @@ export function DashboardPage() {
           )}
         </div>
       </section>
+
+      {/* ---------- Model breakdown (hidden when the server lacks the endpoint) ---------- */}
+      {modelBreakdown && modelBreakdown.providers.length > 0 && (
+        <section className={styles.section} ref={modelsRef}>
+          <header className={styles.sectionHead}>
+            <span className={styles.eyebrow}>{t('dashboard.models_eyebrow')}</span>
+            <h2 className={styles.sectionTitle}>{t('dashboard.models_title')}</h2>
+            <p className={styles.sectionDescription}>
+              {t('dashboard.models_description', { window: modelsWindowLabel })}
+            </p>
+          </header>
+          <div className={styles.modelStack}>
+            {modelBreakdown.providers.map((provider) => (
+              <div key={provider.id} className={styles.panel}>
+                <ProviderModels provider={provider} unknownProviderLabel={unknownProviderLabel} />
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
 
       {/* ---------- Credential health + runtime ---------- */}
       <section className={styles.detailGrid} ref={detailRef}>

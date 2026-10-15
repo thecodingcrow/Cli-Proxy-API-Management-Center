@@ -1,4 +1,15 @@
 import { afterEach, describe, expect, spyOn, test } from 'bun:test';
+import { createElement } from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
+import { createInstance } from 'i18next';
+import { I18nextProvider } from 'react-i18next';
+import en from '../src/i18n/locales/en.json';
+import ko from '../src/i18n/locales/ko.json';
+import ru from '../src/i18n/locales/ru.json';
+import vi from '../src/i18n/locales/vi.json';
+import zhCN from '../src/i18n/locales/zh-CN.json';
+import zhTW from '../src/i18n/locales/zh-TW.json';
+import { ProviderModels } from '../src/features/dashboard/components/ProviderModels';
 import { apiClient } from '../src/services/api/client';
 import { modelUsageApi, normalizeModelUsage } from '../src/services/api/modelUsage';
 import { buildModelBreakdown } from '../src/features/dashboard/modelBreakdown';
@@ -46,7 +57,9 @@ describe('normalizeModelUsage', () => {
     expect(normalizeModelUsage(null)).toBeNull();
     expect(normalizeModelUsage('<html>')).toBeNull();
     expect(normalizeModelUsage({ models: 'x' })).toBeNull();
-    const usage = normalizeModelUsage(payload([null, row({ model: '' }), row({ total_tokens: 4 })]));
+    const usage = normalizeModelUsage(
+      payload([null, row({ model: '' }), row({ total_tokens: 4 })])
+    );
     expect(usage?.models).toHaveLength(1);
   });
 
@@ -131,5 +144,68 @@ describe('modelUsageApi.getModelUsage', () => {
   test('resolves null on a non-envelope body', async () => {
     spyOn(apiClient, 'get').mockResolvedValue('not found page');
     expect(await modelUsageApi.getModelUsage()).toBeNull();
+  });
+});
+
+const testI18n = createInstance();
+await testI18n.init({ lng: 'en', resources: { en: { translation: en } } });
+
+describe('ProviderModels markup', () => {
+  const provider = build([
+    row({
+      model: 'claude-opus-5-5',
+      requests: 7,
+      total_tokens: 1_500_000,
+      input_tokens: 1_000_000,
+    }),
+    row({ model: 'claude-opus-5-5', subagent: true, requests: 3, total_tokens: 500_000 }),
+    row({ model: 'claude-haiku-5', requests: 1, total_tokens: 2_000_000 }),
+  ])!.providers[0];
+
+  const markup = renderToStaticMarkup(
+    createElement(
+      I18nextProvider,
+      { i18n: testI18n },
+      createElement(ProviderModels, { provider, unknownProviderLabel: 'Unknown' })
+    )
+  );
+
+  test('shows compact tokens with the exact value as title', () => {
+    expect(markup).toContain('title="2,000,000"');
+    expect(markup).toContain('>2M<');
+    expect(markup).toContain('>4M<');
+  });
+
+  test('marks subagent usage only on models that have it', () => {
+    // provider-level chip plus the one model that has subagent rows
+    expect(markup.match(/subagent 12\.5%/g)).toHaveLength(1);
+    expect(markup.match(/subagent 25%/g)).toHaveLength(1);
+    expect(markup).not.toContain('subagent 0%');
+  });
+
+  test('renders one accessible share bar per model and a token detail disclosure', () => {
+    expect(markup.match(/role="img"/g)).toHaveLength(2);
+    expect(markup).toContain('claude-haiku-5: 50% of provider tokens');
+    expect(markup).toContain('<details');
+    expect(markup).toContain('Token details');
+  });
+});
+
+describe('model breakdown locales', () => {
+  const dashboardKeys = (locale: unknown) =>
+    (locale as { dashboard: Record<string, string> }).dashboard;
+  const keys = Object.keys(dashboardKeys(en)).filter((key) => key.startsWith('models_'));
+  const locales = { 'zh-CN': zhCN, 'zh-TW': zhTW, ru, vi, ko };
+
+  test('every locale defines every key with the same placeholders', () => {
+    expect(keys.length).toBeGreaterThan(10);
+    const placeholders = (text: string) => (text.match(/{{\w+}}/g) ?? []).sort().join();
+    for (const [name, locale] of Object.entries(locales)) {
+      for (const key of keys) {
+        const value = dashboardKeys(locale)[key];
+        expect(typeof value, `${name}:${key}`).toBe('string');
+        expect(placeholders(value), `${name}:${key}`).toBe(placeholders(dashboardKeys(en)[key]));
+      }
+    }
   });
 });
