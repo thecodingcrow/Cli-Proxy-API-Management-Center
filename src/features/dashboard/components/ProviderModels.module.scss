@@ -1,3 +1,5 @@
+@use '../../../styles/mixins' as *;
+
 /* Main tokens: solid bar colour. Subagent tokens: the same colour, hatched. */
 .head,
 .row {
