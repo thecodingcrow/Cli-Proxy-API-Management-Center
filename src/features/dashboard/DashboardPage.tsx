@@ -431,9 +431,11 @@ export function DashboardPage() {
           <header className={styles.sectionHead}>
             <span className={styles.eyebrow}>{t('dashboard.models_eyebrow')}</span>
             <h2 className={styles.sectionTitle}>{t('dashboard.models_title')}</h2>
-            <p className={styles.sectionDescription}>
-              {modelUsage.loading ? t('dashboard.models_range_loading') : modelsSubtitle}
-            </p>
+            {(modelUsage.loading || modelsSubtitle) && (
+              <p className={styles.sectionDescription}>
+                {modelUsage.loading ? t('dashboard.models_range_loading') : modelsSubtitle}
+              </p>
+            )}
             <RangeToggle value={modelUsage.range} onChange={setModelUsageRange} />
           </header>
           {modelUsage.mismatch && (
