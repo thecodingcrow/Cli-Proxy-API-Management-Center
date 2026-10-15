@@ -1,4 +1,4 @@
-import type { ModelUsageResponse } from '@/services/api/modelUsage';
+import type { ModelUsageRange, ModelUsageResponse } from '@/services/api/modelUsage';
 
 export interface ModelBreakdownRow {
   model: string;
@@ -26,6 +26,10 @@ export interface ProviderBreakdown {
 }
 
 export interface ModelBreakdown {
+  /** Range the data covers; the live window when the server reports none. */
+  range: ModelUsageRange;
+  since: string;
+  timezone: string;
   windowMinutes: number;
   providers: ProviderBreakdown[];
 }
@@ -96,5 +100,11 @@ export function buildModelBreakdown(usage: ModelUsageResponse | null): ModelBrea
     (a, b) => b.totalTokens - a.totalTokens || b.requests - a.requests || a.id.localeCompare(b.id)
   );
 
-  return { windowMinutes: usage.windowMinutes, providers };
+  return {
+    range: usage.range ?? 'window',
+    since: usage.since,
+    timezone: usage.timezone,
+    windowMinutes: usage.windowMinutes,
+    providers,
+  };
 }

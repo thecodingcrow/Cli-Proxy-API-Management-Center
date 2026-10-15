@@ -1,5 +1,9 @@
 import { afterEach, describe, expect, spyOn, test } from 'bun:test';
+import { createElement } from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
 import { createInstance } from 'i18next';
+import { I18nextProvider } from 'react-i18next';
+import { RangeToggle } from '../src/features/dashboard/components/RangeToggle';
 import en from '../src/i18n/locales/en.json';
 import { apiClient } from '../src/services/api/client';
 import { modelUsageApi, normalizeModelUsage } from '../src/services/api/modelUsage';
@@ -201,5 +205,24 @@ describe('large token values', () => {
     expect(formatCompactNumber(999_600_000)).toBe('1B');
     expect(formatCompactNumber(2_100_000_000_000)).toBe('2.1T');
     expect(formatCompactNumber(3_400_000_000).length).toBeLessThanOrEqual(5);
+  });
+});
+
+describe('RangeToggle markup', () => {
+  const markup = renderToStaticMarkup(
+    createElement(
+      I18nextProvider,
+      { i18n },
+      createElement(RangeToggle, { value: 'today', onChange: () => undefined })
+    )
+  );
+
+  test('is a labelled radiogroup with one checked, focusable option', () => {
+    expect(markup).toContain('role="radiogroup"');
+    expect(markup).toContain('aria-label="Model usage range"');
+    expect(markup.match(/role="radio"/g)).toHaveLength(4);
+    expect(markup.match(/aria-checked="true"/g)).toHaveLength(1);
+    expect(markup.match(/tabindex="0"/g)).toHaveLength(1);
+    expect(markup).toContain('aria-label="Today, since midnight server time"');
   });
 });

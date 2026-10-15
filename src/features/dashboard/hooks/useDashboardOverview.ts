@@ -1,5 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { authFilesApi, modelUsageApi, type ModelUsageResponse } from '@/services/api';
+import {
+  authFilesApi,
+  modelUsageApi,
+  type ModelUsageRange,
+  type ModelUsageResponse,
+} from '@/services/api';
 import { useAuthStore, useConfigStore, useModelsStore } from '@/stores';
 import { useApiKeysForModels } from '@/hooks/useApiKeysForModels';
 import { useProviderRecentRequests } from '@/components/providers/hooks/useProviderRecentRequests';
@@ -17,7 +22,26 @@ import {
   type ProviderTraffic,
   type TrafficWindow,
 } from '../types';
-import { buildModelBreakdown } from '../modelBreakdown';
+import { buildModelBreakdown, type ModelBreakdown } from '../modelBreakdown';
+import { isRangeMismatch, readSavedModelUsageRange, saveModelUsageRange } from '../modelUsageRange';
+
+interface ModelUsageEntry {
+  usage: ModelUsageResponse | null;
+  failed: boolean;
+}
+
+export interface ModelUsageView {
+  range: ModelUsageRange;
+  breakdown: ModelBreakdown | null;
+  /** No answer yet for the selected range. */
+  loading: boolean;
+  /** Latest request for the selected range failed; `breakdown` may still hold older data. */
+  failed: boolean;
+  /** Server answered a different range than requested (no range support). */
+  mismatch: boolean;
+  /** Any range has answered, so the section stays reachable. */
+  available: boolean;
+}
 
 const EMPTY_TRAFFIC: TrafficWindow = {
   buckets: [],
@@ -140,19 +164,36 @@ export function useDashboardOverview() {
     }
   }, [connected]);
 
+  const [modelUsageRange, setModelUsageRangeState] = useState<ModelUsageRange>(() =>
+    readSavedModelUsageRange()
+  );
   const [modelUsageState, setModelUsageState] = useState<{
     apiBase: string;
-    usage: ModelUsageResponse | null;
+    byRange: Partial<Record<ModelUsageRange, ModelUsageEntry>>;
   } | null>(null);
-  const modelUsageRequestRef = useRef(0);
+  const modelUsageRequestRef = useRef<Record<string, number>>({});
+
+  const setModelUsageRange = useCallback((range: ModelUsageRange) => {
+    saveModelUsageRange(range);
+    setModelUsageRangeState(range);
+  }, []);
 
   const loadModelUsage = useCallback(async () => {
     if (!connected) return;
-    const requestId = ++modelUsageRequestRef.current;
-    const usage = await modelUsageApi.getModelUsage();
-    if (requestId !== modelUsageRequestRef.current) return;
-    setModelUsageState({ apiBase, usage });
-  }, [connected, apiBase]);
+    const range = modelUsageRange;
+    const requestId = (modelUsageRequestRef.current[range] ?? 0) + 1;
+    modelUsageRequestRef.current[range] = requestId;
+    const usage = await modelUsageApi.getModelUsage(range);
+    if (requestId !== modelUsageRequestRef.current[range]) return;
+    setModelUsageState((previous) => {
+      const byRange = previous?.apiBase === apiBase ? { ...previous.byRange } : {};
+      // A failed refresh keeps the last good data for this range.
+      byRange[range] = usage
+        ? { usage, failed: false }
+        : { usage: byRange[range]?.usage ?? null, failed: true };
+      return { apiBase, byRange };
+    });
+  }, [connected, apiBase, modelUsageRange]);
 
   const loadModels = useCallback(async () => {
     if (!connected || !apiBase) return;
@@ -173,9 +214,12 @@ export function useDashboardOverview() {
 
   useEffect(() => {
     void loadModelUsage();
-    // Invalidate in-flight responses when the connection changes or the page unmounts.
+    // Invalidate in-flight responses when the connection or range changes or the page unmounts.
+    const requestIds = modelUsageRequestRef.current;
     return () => {
-      modelUsageRequestRef.current += 1;
+      Object.keys(requestIds).forEach((key) => {
+        requestIds[key] += 1;
+      });
     };
   }, [loadModelUsage]);
 
@@ -266,13 +310,21 @@ export function useDashboardOverview() {
     };
   }, [usageByProvider, authFiles]);
 
-  const modelBreakdown = useMemo(
-    () =>
-      connected && modelUsageState?.apiBase === apiBase
-        ? buildModelBreakdown(modelUsageState.usage)
-        : null,
-    [connected, apiBase, modelUsageState]
-  );
+  const modelUsage = useMemo<ModelUsageView>(() => {
+    const byRange =
+      connected && modelUsageState?.apiBase === apiBase ? modelUsageState.byRange : {};
+    const entry = byRange[modelUsageRange];
+    const breakdown = buildModelBreakdown(entry?.usage ?? null);
+    return {
+      range: modelUsageRange,
+      breakdown,
+      loading: !entry,
+      failed: entry?.failed ?? false,
+      mismatch: breakdown ? isRangeMismatch(modelUsageRange, breakdown.range) : false,
+      // Latches once any range answered, so an idle live window cannot hide the other ranges.
+      available: Object.values(byRange).some((item) => item.usage !== null),
+    };
+  }, [connected, apiBase, modelUsageState, modelUsageRange]);
 
   const credentials = useMemo<CredentialHealth | null>(() => {
     if (!authFiles) return null;
@@ -322,7 +374,8 @@ export function useDashboardOverview() {
     providerKeyCounts,
     traffic,
     providers,
-    modelBreakdown,
+    modelUsage,
+    setModelUsageRange,
     credentials,
     refresh,
   };

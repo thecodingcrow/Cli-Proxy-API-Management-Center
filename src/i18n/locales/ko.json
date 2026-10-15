@@ -173,6 +173,7 @@
     "models_span_window": "최근 {{window}} 동안 모델별 토큰 비중입니다.",
     "models_span_today": "{{time}}({{timezone}}) 이후 모델별 토큰 비중입니다.",
     "models_span_local_time": "서버 시간",
+    "models_span_days_one": "최근 {{count}}일 동안 모델별 토큰 비중입니다.",
     "models_span_days_other": "최근 {{count}}일 동안 모델별 토큰 비중입니다.",
     "models_span_total": "{{date}}(집계 시작) 이후 모델별 토큰 비중입니다.",
     "models_span_total_unknown": "집계된 전체 사용량에서 모델별 토큰 비중입니다.",

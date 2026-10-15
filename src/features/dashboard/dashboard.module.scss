@@ -667,6 +667,17 @@
   gap: $spacing-md;
 }
 
+.modelNotice {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text-secondary);
+}
+
+.modelNoticeError {
+  color: var(--viz-failure);
+}
+
 /* ---------- 双栏细节区 ---------- */
 
 .detailGrid {

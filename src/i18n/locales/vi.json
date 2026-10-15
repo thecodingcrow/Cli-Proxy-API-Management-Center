@@ -173,6 +173,7 @@
     "models_span_window": "Tỷ lệ token của từng mô hình trong {{window}} gần nhất.",
     "models_span_today": "Tỷ lệ token của từng mô hình từ {{time}} ({{timezone}}).",
     "models_span_local_time": "giờ máy chủ",
+    "models_span_days_one": "Tỷ lệ token của từng mô hình trong {{count}} ngày gần nhất.",
     "models_span_days_other": "Tỷ lệ token của từng mô hình trong {{count}} ngày gần nhất.",
     "models_span_total": "Tỷ lệ token của từng mô hình từ {{date}} (bắt đầu theo dõi).",
     "models_span_total_unknown": "Tỷ lệ token của từng mô hình trên toàn bộ mức dùng đã theo dõi.",

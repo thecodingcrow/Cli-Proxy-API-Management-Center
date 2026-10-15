@@ -19,6 +19,9 @@ import { Sparkline } from './components/Sparkline';
 import { ThroughputChart } from './components/ThroughputChart';
 import { useCountUp, useRevealGroup, useRevealOnScroll } from '@/hooks/motion';
 import { ProviderModels } from './components/ProviderModels';
+import { RangeToggle } from './components/RangeToggle';
+import { Skeleton } from '@/components/ui/Skeleton';
+import { formatRangeSpan } from './modelUsageRange';
 import { formatWindowLabel, providerLabel, toneForSuccessRate, type MeterTone } from './utils';
 import styles from './dashboard.module.scss';
 
@@ -48,7 +51,8 @@ export function DashboardPage() {
     counts,
     traffic,
     providers,
-    modelBreakdown,
+    modelUsage,
+    setModelUsageRange,
     credentials,
     refresh,
   } = useDashboardOverview();
@@ -71,12 +75,12 @@ export function DashboardPage() {
     [traffic.windowMinutes, t]
   );
 
-  const modelsWindowLabel = useMemo(
+  const modelsSubtitle = useMemo(
     () =>
-      modelBreakdown && modelBreakdown.windowMinutes > 0
-        ? formatWindowLabel(modelBreakdown.windowMinutes, t, DASH)
-        : windowLabel,
-    [modelBreakdown, windowLabel, t]
+      modelUsage.breakdown
+        ? `${formatRangeSpan(modelUsage.breakdown, t, i18n.language)} ${t('dashboard.models_subagent_hint')}`
+        : '',
+    [modelUsage.breakdown, t, i18n.language]
   );
 
   const heroSparkPoints = useMemo(
@@ -421,22 +425,54 @@ export function DashboardPage() {
         </div>
       </section>
 
-      {/* ---------- Model breakdown (hidden when the server lacks the endpoint) ---------- */}
-      {modelBreakdown && modelBreakdown.providers.length > 0 && (
+      {/* ---------- Model breakdown (hidden until the server has answered once) ---------- */}
+      {modelUsage.available && (
         <section className={styles.section} ref={modelsRef}>
           <header className={styles.sectionHead}>
             <span className={styles.eyebrow}>{t('dashboard.models_eyebrow')}</span>
             <h2 className={styles.sectionTitle}>{t('dashboard.models_title')}</h2>
             <p className={styles.sectionDescription}>
-              {t('dashboard.models_description', { window: modelsWindowLabel })}
+              {modelUsage.loading ? t('dashboard.models_range_loading') : modelsSubtitle}
             </p>
+            <RangeToggle value={modelUsage.range} onChange={setModelUsageRange} />
           </header>
-          <div className={styles.modelStack}>
-            {modelBreakdown.providers.map((provider) => (
+          {modelUsage.mismatch && (
+            <p className={styles.modelNotice} role="status">
+              {t('dashboard.models_range_unsupported', {
+                range: t(`dashboard.models_range_${modelUsage.range}`),
+              })}
+            </p>
+          )}
+          {modelUsage.failed && (
+            <p className={`${styles.modelNotice} ${styles.modelNoticeError}`} role="alert">
+              {t(
+                modelUsage.breakdown
+                  ? 'dashboard.models_range_error_stale'
+                  : 'dashboard.models_range_error'
+              )}
+            </p>
+          )}
+          <div className={styles.modelStack} aria-busy={modelUsage.loading}>
+            {modelUsage.loading && (
+              <div
+                className={styles.panel}
+                role="status"
+                aria-label={t('dashboard.models_range_loading')}
+              >
+                <Skeleton width="30%" height={22} />
+                <Skeleton height={14} />
+                <Skeleton height={14} />
+                <Skeleton height={14} />
+              </div>
+            )}
+            {modelUsage.breakdown?.providers.map((provider) => (
               <div key={provider.id} className={styles.panel}>
                 <ProviderModels provider={provider} unknownProviderLabel={unknownProviderLabel} />
               </div>
             ))}
+            {modelUsage.breakdown && modelUsage.breakdown.providers.length === 0 && (
+              <p className={styles.modelNotice}>{t('dashboard.models_range_empty')}</p>
+            )}
           </div>
         </section>
       )}
