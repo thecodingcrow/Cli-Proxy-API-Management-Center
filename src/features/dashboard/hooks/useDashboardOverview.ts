@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { authFilesApi } from '@/services/api';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { authFilesApi, modelUsageApi, type ModelUsageResponse } from '@/services/api';
 import { useAuthStore, useConfigStore, useModelsStore } from '@/stores';
 import { useApiKeysForModels } from '@/hooks/useApiKeysForModels';
 import { useProviderRecentRequests } from '@/components/providers/hooks/useProviderRecentRequests';
@@ -17,6 +17,7 @@ import {
   type ProviderTraffic,
   type TrafficWindow,
 } from '../types';
+import { buildModelBreakdown } from '../modelBreakdown';
 
 const EMPTY_TRAFFIC: TrafficWindow = {
   buckets: [],
@@ -139,6 +140,20 @@ export function useDashboardOverview() {
     }
   }, [connected]);
 
+  const [modelUsageState, setModelUsageState] = useState<{
+    apiBase: string;
+    usage: ModelUsageResponse | null;
+  } | null>(null);
+  const modelUsageRequestRef = useRef(0);
+
+  const loadModelUsage = useCallback(async () => {
+    if (!connected) return;
+    const requestId = ++modelUsageRequestRef.current;
+    const usage = await modelUsageApi.getModelUsage();
+    if (requestId !== modelUsageRequestRef.current) return;
+    setModelUsageState({ apiBase, usage });
+  }, [connected, apiBase]);
+
   const loadModels = useCallback(async () => {
     if (!connected || !apiBase) return;
     try {
@@ -156,15 +171,24 @@ export function useDashboardOverview() {
     void loadModels();
   }, [connected, fetchConfig, loadAuthFiles, loadModels]);
 
+  useEffect(() => {
+    void loadModelUsage();
+    // Invalidate in-flight responses when the connection changes or the page unmounts.
+    return () => {
+      modelUsageRequestRef.current += 1;
+    };
+  }, [loadModelUsage]);
+
   const refresh = useCallback(async () => {
     if (!connected) return;
     await Promise.allSettled([
       fetchConfig(true),
       loadAuthFiles(),
       loadModels(),
+      loadModelUsage(),
       refreshRecentRequests(),
     ]);
-  }, [connected, fetchConfig, loadAuthFiles, loadModels, refreshRecentRequests]);
+  }, [connected, fetchConfig, loadAuthFiles, loadModels, loadModelUsage, refreshRecentRequests]);
 
   const providerKeyCounts = useMemo(() => (config ? getProviderKeyCounts(config) : null), [config]);
 
@@ -242,6 +266,14 @@ export function useDashboardOverview() {
     };
   }, [usageByProvider, authFiles]);
 
+  const modelBreakdown = useMemo(
+    () =>
+      connected && modelUsageState?.apiBase === apiBase
+        ? buildModelBreakdown(modelUsageState.usage)
+        : null,
+    [connected, apiBase, modelUsageState]
+  );
+
   const credentials = useMemo<CredentialHealth | null>(() => {
     if (!authFiles) return null;
 
@@ -290,6 +322,7 @@ export function useDashboardOverview() {
     providerKeyCounts,
     traffic,
     providers,
+    modelBreakdown,
     credentials,
     refresh,
   };

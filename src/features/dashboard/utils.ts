@@ -1,3 +1,4 @@
+import type { TFunction } from 'i18next';
 import { TRAFFIC_BUCKET_MINUTES } from './types';
 
 /** 供应商展示名。均为专有名词，不进入 i18n。 */
@@ -36,6 +37,15 @@ export interface WindowParts {
 export function splitWindowMinutes(totalMinutes: number): WindowParts {
   const safe = Math.max(0, Math.round(totalMinutes));
   return { hours: Math.floor(safe / 60), minutes: safe % 60 };
+}
+
+/** 窗口分钟数 → 「3h 20m」式标签；无窗口时返回 `empty` */
+export function formatWindowLabel(totalMinutes: number, t: TFunction, empty: string): string {
+  if (totalMinutes <= 0) return empty;
+  const { hours, minutes } = splitWindowMinutes(totalMinutes);
+  if (hours === 0) return t('dashboard.window_m', { minutes });
+  if (minutes === 0) return t('dashboard.window_h', { hours });
+  return t('dashboard.window_hm', { hours, minutes });
 }
 
 /** 桶数 → 覆盖分钟数 */
