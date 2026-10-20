@@ -52,6 +52,8 @@ export interface ModelUsageQuotaWindow {
   usedPct: number;
   costUsdMicros: number;
   pctPerUsd: number;
+  /** Accounts feeding the rate; undefined when the server does not say. */
+  accountsInRate?: number;
   windowRule: string;
   accounts: ModelUsageQuotaAccount[];
   windowStart: string;
@@ -64,7 +66,6 @@ export interface ModelUsageQuota {
   provider: string;
   accounts: number;
   /** Accounts feeding the rate; undefined when the server does not say. */
-  accountsInRate?: number;
   pooling: string;
   weeklyAll?: ModelUsageQuotaWindow;
   fable?: ModelUsageQuotaWindow;
@@ -124,6 +125,7 @@ const normalizeQuotaWindow = (raw: unknown): ModelUsageQuotaWindow | undefined =
     usedPct,
     costUsdMicros: readCount(raw.cost_usd_micros),
     pctPerUsd: readCount(raw.pct_per_usd),
+    accountsInRate: readOptionalCount(raw.accounts_in_rate),
     windowRule: readText(raw.window_rule),
     accounts,
     windowStart: readText(raw.window_start),
@@ -139,7 +141,6 @@ const normalizeQuota = (raw: unknown): ModelUsageQuota | undefined => {
   return {
     provider: readText(raw.provider).toLowerCase(),
     accounts: readCount(raw.accounts),
-    accountsInRate: readOptionalCount(raw.accounts_in_rate),
     pooling: readText(raw.pooling),
     weeklyAll: normalizeQuotaWindow(raw.weekly_all),
     fable: normalizeQuotaWindow(raw.fable),

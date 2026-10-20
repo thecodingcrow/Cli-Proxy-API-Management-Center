@@ -49,6 +49,17 @@ function windowLines(t: Translate, window: ModelUsageQuotaWindow | undefined): s
     : [];
 }
 
+function coverageLines(
+  t: Translate,
+  window: ModelUsageQuotaWindow | undefined,
+  total: number
+): string[] {
+  const used = window?.accountsInRate;
+  return used !== undefined && used < total
+    ? [t('dashboard.models_hint_rate_coverage', { used, total })]
+    : [];
+}
+
 interface Figures {
   cost: string | null;
   fable: string | null;
@@ -93,22 +104,12 @@ function hintOf(
       t('dashboard.models_hint_over_100')
     );
     lines.push(...windowLines(t, quota?.weeklyAll));
+    lines.push(...coverageLines(t, quota?.weeklyAll, quota?.accounts ?? 0));
     if (figures.fable) {
       lines.push(t('dashboard.models_hint_fable_heading'), ...windowLines(t, quota?.fable));
+      lines.push(...coverageLines(t, quota?.fable, quota?.fable?.accounts.length ?? 0));
     }
     if (quota?.accounts) lines.push(t('dashboard.models_hint_accounts', { count: quota.accounts }));
-    if (
-      quota?.accounts &&
-      quota.accountsInRate !== undefined &&
-      quota.accountsInRate < quota.accounts
-    ) {
-      lines.push(
-        t('dashboard.models_hint_rate_coverage', {
-          used: quota.accountsInRate,
-          total: quota.accounts,
-        })
-      );
-    }
     if (quota?.stale) lines.push(t('dashboard.models_hint_stale'));
   }
   if (source.costPartial) lines.push(t('dashboard.models_hint_partial'));

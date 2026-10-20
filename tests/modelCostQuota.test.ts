@@ -323,6 +323,13 @@ describe('backend golden response', () => {
     ]);
     expect(q.fable!.models).toEqual(['claude-fable-5-1']);
     expect(q.fable!.accounts).toHaveLength(1);
+    expect([q.weeklyAll!.accountsInRate, q.fable!.accountsInRate]).toEqual([2, 1]);
+    expect(q.weeklyAll!.accounts[0]).toMatchObject({
+      exact: true,
+      baselineAt: '2025-02-24T21:20:00Z',
+      baselineUsedPct: 0,
+      costUsdMicros: 18000,
+    });
   });
 
   test('breakdown flags Fable, sums totals, quota only on claude', () => {
@@ -357,11 +364,11 @@ describe('backend golden response', () => {
 });
 
 describe('rate coverage', () => {
-  const inexact = (over: Record<string, unknown> = {}) => ({
+  const inexact = (inRate = 1, over: Record<string, unknown> = {}) => ({
     ...quota,
     accounts: 3,
-    accounts_in_rate: 1,
     weekly_all: {
+      accounts_in_rate: inRate,
       used_pct: 41.5,
       cost_usd_micros: 1,
       pct_per_usd: 0.5,
@@ -386,7 +393,7 @@ describe('rate coverage', () => {
 
   test('normalises baseline fields and accounts_in_rate', () => {
     const q = normalizeModelUsage(payload([row({})], { quota: inexact() }))!.quota!;
-    expect(q.accountsInRate).toBe(1);
+    expect(q.weeklyAll!.accountsInRate).toBe(1);
     expect(q.weeklyAll!.accounts[0]).toMatchObject({
       exact: false,
       baselineAt: '2026-10-22T07:00:00Z',
@@ -394,7 +401,7 @@ describe('rate coverage', () => {
     });
     expect(q.weeklyAll!.accounts[1].exact).toBe(true);
     const old = normalizeModelUsage(payload([row({})], { quota }))!.quota!;
-    expect(old.accountsInRate).toBeUndefined();
+    expect(old.weeklyAll!.accountsInRate).toBeUndefined();
     expect(old.weeklyAll!.accounts[0].exact).toBe(true);
   });
 
@@ -408,7 +415,7 @@ describe('rate coverage', () => {
   });
 
   test('no coverage line when every account feeds the rate', () => {
-    const markup = render(priced, { quota: inexact({ accounts_in_rate: 3 }) });
+    const markup = render(priced, { quota: inexact(3) });
     expect(markup).not.toContain('accounts in the rate so far');
   });
 
