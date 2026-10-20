@@ -30,15 +30,33 @@ function windowLines(t: Translate, window: ModelUsageQuotaWindow | undefined): s
   if (!window) return [];
   if (window.accounts.length > 0) {
     return window.accounts.map((account, index) =>
-      t('dashboard.models_hint_account', {
-        n: index + 1,
-        percent: formatQuotaPct(account.usedPct) ?? '0%',
-        time: formatReset(account.resetsAt),
-      })
+      account.exact || account.baselineUsedPct === undefined
+        ? t('dashboard.models_hint_account', {
+            n: index + 1,
+            percent: formatQuotaPct(account.usedPct) ?? '0%',
+            time: formatReset(account.resetsAt),
+          })
+        : t('dashboard.models_hint_account_since', {
+            n: index + 1,
+            percent: formatQuotaPct(account.usedPct) ?? '0%',
+            since: formatReset(account.baselineAt),
+            points: Math.max(0, account.usedPct - account.baselineUsedPct).toFixed(1),
+          })
     );
   }
   return window.resetsAt
     ? [t('dashboard.models_hint_reset', { time: formatReset(window.resetsAt) })]
+    : [];
+}
+
+function coverageLines(
+  t: Translate,
+  window: ModelUsageQuotaWindow | undefined,
+  total: number
+): string[] {
+  const used = window?.accountsInRate;
+  return used !== undefined && used < total
+    ? [t('dashboard.models_hint_rate_coverage', { used, total })]
     : [];
 }
 
@@ -76,6 +94,9 @@ function hintOf(
   if (figures.cost) {
     lines.push(t('dashboard.models_hint_price'), t('dashboard.models_hint_cache_write'));
   }
+  if (source === provider && quota && !quota.weeklyAll) {
+    lines.push(t('dashboard.models_hint_quota_pending'));
+  }
   if (figures.weekly || figures.fable) {
     lines.push(
       t('dashboard.models_hint_weekly'),
@@ -83,8 +104,10 @@ function hintOf(
       t('dashboard.models_hint_over_100')
     );
     lines.push(...windowLines(t, quota?.weeklyAll));
+    lines.push(...coverageLines(t, quota?.weeklyAll, quota?.accounts ?? 0));
     if (figures.fable) {
       lines.push(t('dashboard.models_hint_fable_heading'), ...windowLines(t, quota?.fable));
+      lines.push(...coverageLines(t, quota?.fable, quota?.fable?.accounts.length ?? 0));
     }
     if (quota?.accounts) lines.push(t('dashboard.models_hint_accounts', { count: quota.accounts }));
     if (quota?.stale) lines.push(t('dashboard.models_hint_stale'));

@@ -323,6 +323,13 @@ describe('backend golden response', () => {
     ]);
     expect(q.fable!.models).toEqual(['claude-fable-5-1']);
     expect(q.fable!.accounts).toHaveLength(1);
+    expect([q.weeklyAll!.accountsInRate, q.fable!.accountsInRate]).toEqual([2, 1]);
+    expect(q.weeklyAll!.accounts[0]).toMatchObject({
+      exact: true,
+      baselineAt: '2025-02-24T21:20:00Z',
+      baselineUsedPct: 0,
+      costUsdMicros: 18000,
+    });
   });
 
   test('breakdown flags Fable, sums totals, quota only on claude', () => {
@@ -353,5 +360,75 @@ describe('backend golden response', () => {
     expect(claude).toContain('&lt;$0.01');
     expect(claude).toContain('Quota data is stale.');
     expect(html(providers[1])).toContain('1 unpriced');
+  });
+});
+
+describe('rate coverage', () => {
+  const inexact = (inRate = 1, over: Record<string, unknown> = {}) => ({
+    ...quota,
+    accounts: 3,
+    weekly_all: {
+      accounts_in_rate: inRate,
+      used_pct: 41.5,
+      cost_usd_micros: 1,
+      pct_per_usd: 0.5,
+      accounts: [
+        account('1', {
+          used_pct: 30,
+          exact: false,
+          baseline_at: '2026-10-22T07:00:00Z',
+          baseline_used_pct: 12.5,
+        }),
+        account('2', {
+          used_pct: 27,
+          exact: true,
+          baseline_at: '2026-10-20T07:00:00Z',
+          baseline_used_pct: 0,
+        }),
+      ],
+    },
+    fable: undefined,
+    ...over,
+  });
+
+  test('normalises baseline fields and accounts_in_rate', () => {
+    const q = normalizeModelUsage(payload([row({})], { quota: inexact() }))!.quota!;
+    expect(q.weeklyAll!.accountsInRate).toBe(1);
+    expect(q.weeklyAll!.accounts[0]).toMatchObject({
+      exact: false,
+      baselineAt: '2026-10-22T07:00:00Z',
+      baselineUsedPct: 12.5,
+    });
+    expect(q.weeklyAll!.accounts[1].exact).toBe(true);
+    const old = normalizeModelUsage(payload([row({})], { quota }))!.quota!;
+    expect(old.weeklyAll!.accountsInRate).toBeUndefined();
+    expect(old.weeklyAll!.accounts[0].exact).toBe(true);
+  });
+
+  test('inexact account line shows baseline and points; exact line unchanged', () => {
+    const markup = render(priced, { quota: inexact() });
+    expect(markup).toMatch(
+      /account 1: 30\.0% used, rate measured since [^\n"]*Oct[^\n"]* \(17\.5 points\)/
+    );
+    expect(markup).toMatch(/account 2: 27\.0% used, resets/);
+    expect(markup).toContain('1 of 3 accounts in the rate so far');
+  });
+
+  test('no coverage line when every account feeds the rate', () => {
+    const markup = render(priced, { quota: inexact(3) });
+    expect(markup).not.toContain('accounts in the rate so far');
+  });
+
+  test('weekly_all absent: cost only, card explains', () => {
+    const costOnly = [
+      row({ cost_usd_micros: 2_000_000 }),
+      row({ model: 'claude-haiku-5-5', cost_usd_micros: 1_000_000 }),
+    ];
+    const markup = render(costOnly, {
+      quota: { ...quota, weekly_all: undefined, fable: undefined },
+    });
+    expect(markup).toContain('$3.00');
+    expect(markup).not.toContain('weekly</span>');
+    expect(markup.match(/Quota share appears once enough usage is measured/g)).toHaveLength(1);
   });
 });
