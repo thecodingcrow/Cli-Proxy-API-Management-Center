@@ -208,6 +208,7 @@
     "models_quota_weekly": "≈ 주간 {{percent}}",
     "models_quota_fable": "Fable 주간 {{percent}}",
     "models_hint_price": "가격 = 각 요청 당일의 Anthropic API 정가로 환산한 토큰 비용이며, 구독은 이렇게 과금되지 않습니다.",
+    "models_hint_cache_write": "캐시 쓰기는 5분 요율로 산정되며, 1시간 캐시 쓰기는 더 비쌉니다.",
     "models_hint_weekly": "Fable이 아닌 행의 주간 %는 추정치입니다. 합산한 주간 사용률을 비용 비율로 나눈 값이며, Fable %는 Fable 주간 창 기준의 정확한 값입니다.",
     "models_hint_external": "사용률에는 이 프록시를 거치지 않은 트래픽(claude.ai, 휴대폰)도 포함되며, 이는 프록시 행에 반영됩니다.",
     "models_hint_over_100": "긴 기간에서 합계가 100%를 넘으면 \"한 주 이상의 할당량\"을 뜻합니다.",

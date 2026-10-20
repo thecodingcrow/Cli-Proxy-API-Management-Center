@@ -208,6 +208,7 @@
     "models_quota_weekly": "≈ {{percent}} weekly",
     "models_quota_fable": "{{percent}} Fable weekly",
     "models_hint_price": "Price = what the tokens would cost at Anthropic's API list price on the day of each request; the subscription is not billed this way.",
+    "models_hint_cache_write": "Cache writes priced at the 5-minute rate; 1-hour cache writes cost more.",
     "models_hint_weekly": "Weekly % on non-Fable rows is an estimate: the pooled weekly utilization split by cost. Fable % is exact against the Fable weekly window.",
     "models_hint_external": "Utilization also counts traffic that did not go through this proxy (claude.ai, phone), which lands on proxy rows.",
     "models_hint_over_100": "Totals above 100% on long ranges mean \"more than one week of quota\".",

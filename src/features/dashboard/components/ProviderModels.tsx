@@ -73,7 +73,9 @@ function hintOf(
 ): string {
   const quota = provider.quota;
   const lines: string[] = [];
-  if (figures.cost) lines.push(t('dashboard.models_hint_price'));
+  if (figures.cost) {
+    lines.push(t('dashboard.models_hint_price'), t('dashboard.models_hint_cache_write'));
+  }
   if (figures.weekly || figures.fable) {
     lines.push(
       t('dashboard.models_hint_weekly'),

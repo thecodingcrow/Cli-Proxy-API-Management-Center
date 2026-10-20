@@ -207,6 +207,7 @@
     "models_quota_weekly": "≈ 每周 {{percent}}",
     "models_quota_fable": "Fable 每周 {{percent}}",
     "models_hint_price": "价格 = 按 Anthropic API 在每次请求当天的标价计算这些 token 的费用；订阅并非按此计费。",
+    "models_hint_cache_write": "缓存写入按 5 分钟费率计价；1 小时缓存写入费用更高。",
     "models_hint_weekly": "非 Fable 行的每周占比为估算值：按费用拆分的合并每周用量。Fable 占比对照 Fable 每周窗口，是精确值。",
     "models_hint_external": "用量也包含未经过此代理的流量（claude.ai、手机），这部分会计入代理的行。",
     "models_hint_over_100": "较长区间内合计超过 100% 表示“超过一周的额度”。",

@@ -250,6 +250,7 @@ describe('ProviderModels cost and quota markup', () => {
     expect(markup).toContain('Accounts pooled: 2');
     expect(markup).toContain('Cost partial');
     expect(markup).toContain('Unpriced requests: 3');
+    expect(markup).toContain('priced at the 5-minute rate; 1-hour cache writes cost more.');
   });
 
   test('old backend renders no cost, no percent', () => {
