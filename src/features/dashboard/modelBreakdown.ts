@@ -1,4 +1,8 @@
-import type { ModelUsageRange, ModelUsageResponse } from '@/services/api/modelUsage';
+import type {
+  ModelUsageQuota,
+  ModelUsageRange,
+  ModelUsageResponse,
+} from '@/services/api/modelUsage';
 
 export interface ModelBreakdownRow {
   model: string;
@@ -15,6 +19,15 @@ export interface ModelBreakdownRow {
   share: number;
   /** 0–100 of this model's own tokens; null when it has none */
   subagentShare: number | null;
+  /** API-equivalent USD; undefined when the server sends no cost. */
+  costUsd?: number;
+  cacheWriteTokens?: number;
+  unpricedRequests: number;
+  costPartial: boolean;
+  quotaWeeklyPct?: number;
+  quotaFablePct?: number;
+  /** Model sits in the Fable quota scope, so its Fable share is exact. */
+  fable: boolean;
 }
 
 export interface ProviderBreakdown {
@@ -23,6 +36,13 @@ export interface ProviderBreakdown {
   totalTokens: number;
   subagentTokens: number;
   models: ModelBreakdownRow[];
+  costUsd?: number;
+  unpricedRequests: number;
+  costPartial: boolean;
+  quotaWeeklyPct?: number;
+  quotaFablePct?: number;
+  /** Quota block when it belongs to this provider. */
+  quota?: ModelUsageQuota;
 }
 
 export interface ModelBreakdown {
@@ -34,7 +54,11 @@ export interface ModelBreakdown {
   providers: ProviderBreakdown[];
 }
 
-type MutableRow = Omit<ModelBreakdownRow, 'share' | 'subagentShare'>;
+/** Sums optional figures; stays undefined while no addend is defined. */
+const addOptional = (total: number | undefined, value: number | undefined): number | undefined =>
+  value === undefined ? total : (total ?? 0) + value;
+
+type MutableRow = Omit<ModelBreakdownRow, 'share' | 'subagentShare' | 'fable'>;
 
 /**
  * Merges the main and subagent backend rows of one model, drops providers without
@@ -66,6 +90,8 @@ export function buildModelBreakdown(usage: ModelUsageResponse | null): ModelBrea
         totalTokens: 0,
         mainTokens: 0,
         subagentTokens: 0,
+        unpricedRequests: 0,
+        costPartial: false,
       };
       provider.rows.set(row.model, merged);
     }
@@ -76,6 +102,15 @@ export function buildModelBreakdown(usage: ModelUsageResponse | null): ModelBrea
     merged.cachedTokens += row.cachedTokens;
     merged.reasoningTokens += row.reasoningTokens;
     merged.totalTokens += row.totalTokens;
+    merged.costUsd = addOptional(
+      merged.costUsd,
+      row.costUsdMicros === undefined ? undefined : row.costUsdMicros / 1e6
+    );
+    merged.cacheWriteTokens = addOptional(merged.cacheWriteTokens, row.cacheWriteTokens);
+    merged.unpricedRequests += row.unpricedRequests ?? 0;
+    merged.costPartial ||= row.costPartial === true;
+    merged.quotaWeeklyPct = addOptional(merged.quotaWeeklyPct, row.quotaWeeklyPct);
+    merged.quotaFablePct = addOptional(merged.quotaFablePct, row.quotaFablePct);
     if (row.subagent) merged.subagentTokens += row.totalTokens;
     else merged.mainTokens += row.totalTokens;
   });
@@ -86,14 +121,31 @@ export function buildModelBreakdown(usage: ModelUsageResponse | null): ModelBrea
     const rows = Array.from(provider.rows.values());
     const totalTokens = rows.reduce((sum, row) => sum + row.totalTokens, 0);
     const subagentTokens = rows.reduce((sum, row) => sum + row.subagentTokens, 0);
+    const quota = usage.quota?.provider === id ? usage.quota : undefined;
+    const fableModels = new Set(quota?.fable?.models ?? []);
     const models = rows
       .map<ModelBreakdownRow>((row) => ({
         ...row,
+        fable: fableModels.has(row.model),
         share: totalTokens > 0 ? (row.totalTokens / totalTokens) * 100 : 0,
         subagentShare: row.totalTokens > 0 ? (row.subagentTokens / row.totalTokens) * 100 : null,
       }))
       .sort((a, b) => b.totalTokens - a.totalTokens || a.model.localeCompare(b.model));
-    providers.push({ id, requests: provider.requests, totalTokens, subagentTokens, models });
+    const sum = (pick: (row: ModelBreakdownRow) => number | undefined) =>
+      models.reduce<number | undefined>((total, row) => addOptional(total, pick(row)), undefined);
+    providers.push({
+      id,
+      requests: provider.requests,
+      totalTokens,
+      subagentTokens,
+      models,
+      costUsd: sum((row) => row.costUsd),
+      unpricedRequests: models.reduce((total, row) => total + row.unpricedRequests, 0),
+      costPartial: models.some((row) => row.costPartial),
+      quotaWeeklyPct: sum((row) => row.quotaWeeklyPct),
+      quotaFablePct: sum((row) => row.quotaFablePct),
+      quota,
+    });
   });
 
   providers.sort(
