@@ -37,6 +37,10 @@ export interface ModelUsageQuotaAccount {
   usedPct: number;
   windowStart: string;
   resetsAt: string;
+  /** False when the rate was measured since `baselineAt` rather than the whole window. */
+  exact: boolean;
+  baselineAt: string;
+  baselineUsedPct?: number;
   costUsdMicros: number;
 }
 
@@ -59,6 +63,8 @@ export interface ModelUsageQuotaWindow {
 export interface ModelUsageQuota {
   provider: string;
   accounts: number;
+  /** Accounts feeding the rate; undefined when the server does not say. */
+  accountsInRate?: number;
   pooling: string;
   weeklyAll?: ModelUsageQuotaWindow;
   fable?: ModelUsageQuotaWindow;
@@ -100,6 +106,9 @@ const normalizeQuotaAccount = (raw: unknown): ModelUsageQuotaAccount | undefined
     windowStart: readText(raw.window_start),
     resetsAt: readText(raw.resets_at),
     costUsdMicros: readCount(raw.cost_usd_micros),
+    exact: raw.exact !== false,
+    baselineAt: readText(raw.baseline_at),
+    baselineUsedPct: readOptionalCount(raw.baseline_used_pct),
   };
 };
 
@@ -130,6 +139,7 @@ const normalizeQuota = (raw: unknown): ModelUsageQuota | undefined => {
   return {
     provider: readText(raw.provider).toLowerCase(),
     accounts: readCount(raw.accounts),
+    accountsInRate: readOptionalCount(raw.accounts_in_rate),
     pooling: readText(raw.pooling),
     weeklyAll: normalizeQuotaWindow(raw.weekly_all),
     fable: normalizeQuotaWindow(raw.fable),

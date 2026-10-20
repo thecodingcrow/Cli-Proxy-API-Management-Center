@@ -30,11 +30,18 @@ function windowLines(t: Translate, window: ModelUsageQuotaWindow | undefined): s
   if (!window) return [];
   if (window.accounts.length > 0) {
     return window.accounts.map((account, index) =>
-      t('dashboard.models_hint_account', {
-        n: index + 1,
-        percent: formatQuotaPct(account.usedPct) ?? '0%',
-        time: formatReset(account.resetsAt),
-      })
+      account.exact || account.baselineUsedPct === undefined
+        ? t('dashboard.models_hint_account', {
+            n: index + 1,
+            percent: formatQuotaPct(account.usedPct) ?? '0%',
+            time: formatReset(account.resetsAt),
+          })
+        : t('dashboard.models_hint_account_since', {
+            n: index + 1,
+            percent: formatQuotaPct(account.usedPct) ?? '0%',
+            since: formatReset(account.baselineAt),
+            points: Math.max(0, account.usedPct - account.baselineUsedPct).toFixed(1),
+          })
     );
   }
   return window.resetsAt
@@ -76,6 +83,9 @@ function hintOf(
   if (figures.cost) {
     lines.push(t('dashboard.models_hint_price'), t('dashboard.models_hint_cache_write'));
   }
+  if (source === provider && quota && !quota.weeklyAll) {
+    lines.push(t('dashboard.models_hint_quota_pending'));
+  }
   if (figures.weekly || figures.fable) {
     lines.push(
       t('dashboard.models_hint_weekly'),
@@ -87,6 +97,18 @@ function hintOf(
       lines.push(t('dashboard.models_hint_fable_heading'), ...windowLines(t, quota?.fable));
     }
     if (quota?.accounts) lines.push(t('dashboard.models_hint_accounts', { count: quota.accounts }));
+    if (
+      quota?.accounts &&
+      quota.accountsInRate !== undefined &&
+      quota.accountsInRate < quota.accounts
+    ) {
+      lines.push(
+        t('dashboard.models_hint_rate_coverage', {
+          used: quota.accountsInRate,
+          total: quota.accounts,
+        })
+      );
+    }
     if (quota?.stale) lines.push(t('dashboard.models_hint_stale'));
   }
   if (source.costPartial) lines.push(t('dashboard.models_hint_partial'));
