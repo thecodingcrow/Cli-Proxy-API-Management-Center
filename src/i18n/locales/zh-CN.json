@@ -217,6 +217,7 @@
     "models_hint_stale": "额度数据已过期。",
     "models_hint_partial": "费用不完整：此区间部分早于精确的逐请求定价（缓存写入未计价）。",
     "models_hint_unpriced": "未计价请求：{{count}}",
+    "models_unpriced_chip": "未计价 {{count}}",
     "provider_unknown": "未归类",
     "health_eyebrow": "健康度",
     "health_title": "凭证状态",

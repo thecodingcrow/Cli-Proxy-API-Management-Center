@@ -218,6 +218,7 @@
     "models_hint_stale": "Dữ liệu hạn mức đã cũ.",
     "models_hint_partial": "Chi phí chưa đầy đủ: một phần khoảng này có trước khi định giá chính xác theo từng yêu cầu (ghi cache chưa tính giá).",
     "models_hint_unpriced": "Yêu cầu chưa có giá: {{count}}",
+    "models_unpriced_chip": "{{count}} chưa có giá",
     "provider_unknown": "Chưa xác định",
     "health_eyebrow": "Sức khỏe",
     "health_title": "Trạng thái credential",

@@ -103,7 +103,11 @@ interface FigureChipsProps {
 function FigureChips({ source, fableScope, provider }: FigureChipsProps) {
   const { t } = useTranslation();
   const figures = figuresOf(source, fableScope);
-  if (!figures.cost && !figures.fable && !figures.weekly) return null;
+  const unpriced =
+    source.unpricedRequests > 0
+      ? t('dashboard.models_unpriced_chip', { count: source.unpricedRequests })
+      : null;
+  if (!figures.cost && !figures.fable && !figures.weekly && !unpriced) return null;
   return (
     <span className={styles.figures} tabIndex={0} title={hintOf(t, source, figures, provider)}>
       {figures.cost && <span className={styles.cost}>{figures.cost}</span>}
@@ -113,6 +117,7 @@ function FigureChips({ source, fableScope, provider }: FigureChipsProps) {
       {figures.weekly && (
         <span>{t('dashboard.models_quota_weekly', { percent: figures.weekly })}</span>
       )}
+      {unpriced && !figures.cost && !figures.weekly && !figures.fable && <span>{unpriced}</span>}
     </span>
   );
 }

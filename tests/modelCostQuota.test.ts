@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { describe, expect, test } from 'bun:test';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
@@ -287,5 +288,69 @@ describe('ProviderModels reset lines and missing Fable scope', () => {
     const markup = render(priced, { quota: { ...quota, fable: undefined } });
     expect(markup).not.toContain('% Fable weekly');
     expect(markup).toContain('≈ 1.0% weekly');
+  });
+});
+
+describe('backend golden response', () => {
+  const golden = JSON.parse(
+    readFileSync(new URL('./fixtures/models-quota.golden.json', import.meta.url), 'utf8')
+  ) as { models: Record<string, unknown>[]; quota: Record<string, unknown> };
+  const usage = normalizeModelUsage(golden)!;
+
+  test('every wire field on every row is read', () => {
+    const wire = (key: string) => key.replace(/_(\w)/g, (_, c: string) => c.toUpperCase());
+    const rowFields: Record<string, string> = { cost_usd_micros: 'costUsdMicros' };
+    golden.models.forEach((raw, index) => {
+      for (const [key, value] of Object.entries(raw)) {
+        const mapped = (usage.models[index] as unknown as Record<string, unknown>)[
+          rowFields[key] ?? wire(key)
+        ];
+        expect(mapped, `${index}:${key}`).toEqual(value);
+      }
+    });
+  });
+
+  test('quota blocks keep accounts, models, stale and rates', () => {
+    const q = usage.quota!;
+    expect(q).toMatchObject({ provider: 'claude', accounts: 2, pooling: 'mean', stale: true });
+    expect(q.observedAt).toBe('2025-02-25T21:19:00Z');
+    expect(q.weeklyAll).toMatchObject({ usedPct: 63.5, costUsdMicros: 20100 });
+    expect(q.weeklyAll!.pctPerUsd).toBeCloseTo(3159.2039800995026, 9);
+    expect(q.weeklyAll!.accounts.map((a) => [a.authIndex, a.usedPct, a.resetsAt])).toEqual([
+      ['ia', 27, '2025-03-03T21:20:00Z'],
+      ['ib', 100, '2025-02-26T21:20:00Z'],
+    ]);
+    expect(q.fable!.models).toEqual(['claude-fable-5-1']);
+    expect(q.fable!.accounts).toHaveLength(1);
+  });
+
+  test('breakdown flags Fable, sums totals, quota only on claude', () => {
+    const [claude, codex] = buildModelBreakdown(usage)!.providers;
+    expect(claude.id).toBe('claude');
+    expect(claude.models.filter((m) => m.fable).map((m) => m.model)).toEqual(['claude-fable-5-1']);
+    expect(claude.costUsd).toBeCloseTo(0.0241, 9);
+    expect(claude.quotaFablePct).toBe(10);
+    expect(codex.quota).toBeUndefined();
+    expect(codex.unpricedRequests).toBe(1);
+  });
+
+  test('markup: per-account lines, Fable exact, stale note, unpriced visible without cost', () => {
+    const providers = buildModelBreakdown(usage)!.providers;
+    const html = (provider: (typeof providers)[number]) =>
+      renderToStaticMarkup(
+        createElement(
+          I18nextProvider,
+          { i18n: testI18n },
+          createElement(ProviderModels, { provider, unknownProviderLabel: 'Unknown' })
+        )
+      );
+    const claude = html(providers[0]);
+    expect(claude).toContain('account 1: 27.0% used, resets');
+    expect(claude).toContain('account 2: 100.0% used, resets');
+    expect(claude).toContain('10.0% Fable weekly');
+    expect(claude).toContain('≈ 37.9% weekly');
+    expect(claude).toContain('&lt;$0.01');
+    expect(claude).toContain('Quota data is stale.');
+    expect(html(providers[1])).toContain('1 unpriced');
   });
 });

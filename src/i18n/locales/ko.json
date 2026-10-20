@@ -218,6 +218,7 @@
     "models_hint_stale": "할당량 데이터가 오래되었습니다.",
     "models_hint_partial": "비용이 일부만 반영됨: 이 기간의 일부는 요청별 정확한 가격 산정 이전입니다(캐시 쓰기 미반영).",
     "models_hint_unpriced": "가격 미산정 요청: {{count}}",
+    "models_unpriced_chip": "가격 미산정 {{count}}",
     "provider_unknown": "미분류",
     "health_eyebrow": "건전성",
     "health_title": "자격 증명 상태",

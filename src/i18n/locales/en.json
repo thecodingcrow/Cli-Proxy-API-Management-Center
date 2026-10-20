@@ -218,6 +218,7 @@
     "models_hint_stale": "Quota data is stale.",
     "models_hint_partial": "Cost partial: part of this range predates exact per-request pricing (cache writes not priced).",
     "models_hint_unpriced": "Unpriced requests: {{count}}",
+    "models_unpriced_chip": "{{count}} unpriced",
     "provider_unknown": "Unattributed",
     "health_eyebrow": "Health",
     "health_title": "Credential status",

@@ -219,6 +219,7 @@
     "models_hint_stale": "Данные квоты устарели.",
     "models_hint_partial": "Стоимость неполная: часть периода предшествует точной оценке по запросам (запись в кэш не оценена).",
     "models_hint_unpriced": "Запросов без цены: {{count}}",
+    "models_unpriced_chip": "без цены: {{count}}",
     "provider_unknown": "Без привязки",
     "health_eyebrow": "Состояние",
     "health_title": "Статус учётных данных",

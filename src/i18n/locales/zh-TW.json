@@ -217,6 +217,7 @@
     "models_hint_stale": "額度資料已過期。",
     "models_hint_partial": "費用不完整：此區間部分早於精確的逐請求定價（快取寫入未計價）。",
     "models_hint_unpriced": "未計價請求：{{count}}",
+    "models_unpriced_chip": "未計價 {{count}}",
     "provider_unknown": "未歸類",
     "health_eyebrow": "健康度",
     "health_title": "憑證狀態",
