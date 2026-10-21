@@ -39,6 +39,9 @@ export interface ModelUsageQuotaAccount {
   resetsAt: string;
   /** False when the rate was measured since `baselineAt` rather than the whole window. */
   exact: boolean;
+  /** Carried rate only: the earlier fit kept across a weekly reset. */
+  fitPctPerUsd?: number;
+  fittedAt: string;
   baselineAt: string;
   baselineUsedPct?: number;
   costUsdMicros: number;
@@ -56,7 +59,9 @@ export interface ModelUsageQuotaWindow {
   accountsInRate?: number;
   windowRule: string;
   /** "rough" until enough usage is observed; absent on the wire means measured. */
-  method: 'rough' | 'measured';
+  method: 'rough' | 'measured' | 'carried';
+  /** When a carried rate was fitted: the sub-block value, else the latest account fit. */
+  fittedAt: string;
   accounts: ModelUsageQuotaAccount[];
   windowStart: string;
   resetsAt: string;
@@ -112,8 +117,13 @@ const normalizeQuotaAccount = (raw: unknown): ModelUsageQuotaAccount | undefined
     exact: raw.exact !== false,
     baselineAt: readText(raw.baseline_at),
     baselineUsedPct: readOptionalCount(raw.baseline_used_pct),
+    fitPctPerUsd: readOptionalCount(raw.fit_pct_per_usd),
+    fittedAt: readText(raw.fitted_at),
   };
 };
+
+const latestFit = (accounts: ModelUsageQuotaAccount[]): string =>
+  accounts.reduce((latest, a) => (a.fittedAt > latest ? a.fittedAt : latest), '');
 
 const normalizeQuotaWindow = (raw: unknown): ModelUsageQuotaWindow | undefined => {
   if (!isRecord(raw)) return undefined;
@@ -129,7 +139,8 @@ const normalizeQuotaWindow = (raw: unknown): ModelUsageQuotaWindow | undefined =
     pctPerUsd: readCount(raw.pct_per_usd),
     accountsInRate: readOptionalCount(raw.accounts_in_rate),
     windowRule: readText(raw.window_rule),
-    method: raw.method === 'rough' ? 'rough' : 'measured',
+    method: raw.method === 'rough' || raw.method === 'carried' ? raw.method : 'measured',
+    fittedAt: readText(raw.fitted_at) || latestFit(accounts),
     accounts,
     windowStart: readText(raw.window_start),
     resetsAt: readText(raw.resets_at),

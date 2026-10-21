@@ -26,22 +26,38 @@ function formatReset(iso: string): string {
   }).format(date);
 }
 
+function formatDay(iso: string): string {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return iso;
+  return new Intl.DateTimeFormat(undefined, {
+    weekday: 'short',
+    day: 'numeric',
+    month: 'short',
+  }).format(date);
+}
+
 function windowLines(t: Translate, window: ModelUsageQuotaWindow | undefined): string[] {
   if (!window) return [];
   if (window.accounts.length > 0) {
     return window.accounts.map((account, index) =>
-      account.exact || account.baselineUsedPct === undefined
-        ? t('dashboard.models_hint_account', {
+      window.method === 'carried' && !account.exact && account.fittedAt
+        ? t('dashboard.models_hint_account_fitted', {
             n: index + 1,
             percent: formatQuotaPct(account.usedPct) ?? '0%',
-            time: formatReset(account.resetsAt),
+            date: formatDay(account.fittedAt),
           })
-        : t('dashboard.models_hint_account_since', {
-            n: index + 1,
-            percent: formatQuotaPct(account.usedPct) ?? '0%',
-            since: formatReset(account.baselineAt),
-            points: Math.max(0, account.usedPct - account.baselineUsedPct).toFixed(1),
-          })
+        : account.exact || account.baselineUsedPct === undefined
+          ? t('dashboard.models_hint_account', {
+              n: index + 1,
+              percent: formatQuotaPct(account.usedPct) ?? '0%',
+              time: formatReset(account.resetsAt),
+            })
+          : t('dashboard.models_hint_account_since', {
+              n: index + 1,
+              percent: formatQuotaPct(account.usedPct) ?? '0%',
+              since: formatReset(account.baselineAt),
+              points: Math.max(0, account.usedPct - account.baselineUsedPct).toFixed(1),
+            })
     );
   }
   return window.resetsAt
@@ -98,7 +114,12 @@ function hintOf(
     lines.push(t('dashboard.models_hint_quota_pending'));
   }
   if (figures.weekly || figures.fable) {
-    if (quota?.weeklyAll?.method === 'rough') {
+    if (quota?.weeklyAll?.method === 'carried') {
+      lines.push(
+        t('dashboard.models_hint_carried', { date: formatDay(quota.weeklyAll.fittedAt) }),
+        t('dashboard.models_hint_external')
+      );
+    } else if (quota?.weeklyAll?.method === 'rough') {
       lines.push(
         t('dashboard.models_hint_rough', { time: formatReset(quota.weeklyAll.windowStart) })
       );
@@ -138,8 +159,24 @@ function FigureChips({ source, fableScope, provider, prominent }: FigureChipsPro
       ? t('dashboard.models_unpriced_chip', { count: source.unpricedRequests })
       : null;
   if (!figures.cost && !figures.fable && !figures.weekly && !unpriced) return null;
-  const weeklyRough = provider.quota?.weeklyAll?.method === 'rough';
-  const fableRough = provider.quota?.fable?.method === 'rough';
+  const weekly = provider.quota?.weeklyAll;
+  const fableWindow = provider.quota?.fable;
+  // Rows keep only "≈"; the method qualifier belongs to the card total.
+  const weeklyKey = !prominent
+    ? 'models_quota_weekly'
+    : weekly?.method === 'rough'
+      ? 'models_quota_weekly_rough'
+      : weekly?.method === 'carried'
+        ? 'models_quota_weekly_carried'
+        : 'models_quota_weekly';
+  const fableKey =
+    fableWindow?.method === 'measured' || !fableWindow
+      ? 'models_quota_fable'
+      : !prominent
+        ? 'models_quota_fable_estimate'
+        : fableWindow.method === 'rough'
+          ? 'models_quota_fable_rough'
+          : 'models_quota_fable_carried';
   return (
     <span
       className={prominent ? `${styles.figures} ${styles.headFigures}` : styles.figures}
@@ -149,17 +186,18 @@ function FigureChips({ source, fableScope, provider, prominent }: FigureChipsPro
       {figures.cost && <span className={styles.cost}>{figures.cost}</span>}
       {figures.fable && (
         <span>
-          {t(fableRough ? 'dashboard.models_quota_fable_rough' : 'dashboard.models_quota_fable', {
+          {t(`dashboard.${fableKey}`, {
             percent: figures.fable,
+            date: formatDay(fableWindow?.fittedAt ?? ''),
           })}
         </span>
       )}
       {figures.weekly && (
         <span>
-          {t(
-            weeklyRough ? 'dashboard.models_quota_weekly_rough' : 'dashboard.models_quota_weekly',
-            { percent: figures.weekly }
-          )}
+          {t(`dashboard.${weeklyKey}`, {
+            percent: figures.weekly,
+            date: formatDay(weekly?.fittedAt ?? ''),
+          })}
         </span>
       )}
       {unpriced && !figures.cost && !figures.weekly && !figures.fable && <span>{unpriced}</span>}
