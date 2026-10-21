@@ -231,7 +231,7 @@ describe('ProviderModels cost and quota markup', () => {
   const markup = render(priced, { quota });
 
   test('estimate rows say ≈ weekly, Fable rows say exact Fable weekly', () => {
-    expect(markup).toContain('≈ 0.8% weekly');
+    expect(markup).toContain('≈ 0.8% of weekly quota');
     expect(markup).toContain('3.0% Fable weekly');
     expect(markup).not.toContain('≈ 3.0%');
     expect(markup).toContain('$4.00');
@@ -239,7 +239,7 @@ describe('ProviderModels cost and quota markup', () => {
 
   test('card total shows summed cost and weekly share', () => {
     expect(markup).toContain('$8.00');
-    expect(markup).toContain('≈ 1.8% weekly');
+    expect(markup).toContain('≈ 1.8% of weekly quota');
   });
 
   test('tooltip carries the rules, reset, accounts, partial and unpriced notes', () => {
@@ -288,7 +288,7 @@ describe('ProviderModels reset lines and missing Fable scope', () => {
   test('without quota.fable, Fable-named rows show only the weekly estimate', () => {
     const markup = render(priced, { quota: { ...quota, fable: undefined } });
     expect(markup).not.toContain('% Fable weekly');
-    expect(markup).toContain('≈ 1.0% weekly');
+    expect(markup).toContain('≈ 1.0% of weekly quota');
   });
 });
 
@@ -356,7 +356,7 @@ describe('backend golden response', () => {
     expect(claude).toContain('account 1: 27.0% used, resets');
     expect(claude).toContain('account 2: 100.0% used, resets');
     expect(claude).toContain('10.0% Fable weekly');
-    expect(claude).toContain('≈ 37.9% weekly');
+    expect(claude).toContain('≈ 37.9% of weekly quota');
     expect(claude).toContain('&lt;$0.01');
     expect(claude).toContain('Quota data is stale.');
     expect(html(providers[1])).toContain('1 unpriced');
@@ -428,7 +428,69 @@ describe('rate coverage', () => {
       quota: { ...quota, weekly_all: undefined, fable: undefined },
     });
     expect(markup).toContain('$3.00');
-    expect(markup).not.toContain('weekly</span>');
+    expect(markup).not.toContain('of weekly quota');
     expect(markup.match(/Quota share appears once enough usage is measured/g)).toHaveLength(1);
+  });
+});
+
+describe('rough vs measured weekly share', () => {
+  const withMethod = (method?: string, fableMethod?: string) => ({
+    ...quota,
+    weekly_all: {
+      used_pct: 41.5,
+      cost_usd_micros: 1,
+      pct_per_usd: 0.5,
+      ...(method ? { method } : {}),
+      window_start: '2026-10-19T07:00:00Z',
+      accounts: [account('1', { exact: false }), account('2', { exact: false })],
+    },
+    fable: { ...quota.fable, ...(fableMethod ? { method: fableMethod } : {}) },
+  });
+
+  test('normalises method; absent means measured', () => {
+    const q = (m?: string) =>
+      normalizeModelUsage(payload([row({})], { quota: withMethod(m) }))!.quota!;
+    expect(q('rough').weeklyAll!.method).toBe('rough');
+    expect(q('measured').weeklyAll!.method).toBe('measured');
+    expect(q().weeklyAll!.method).toBe('measured');
+    expect(q('bogus').weeklyAll!.method).toBe('measured');
+  });
+
+  test('rough rows and card read "(rough)" with the explanation tooltip', () => {
+    const markup = render(priced, { quota: withMethod('rough') });
+    expect(markup).toContain('≈ 0.8% of weekly quota (rough)');
+    expect(markup).toContain('≈ 1.8% of weekly quota (rough)');
+    expect(markup).toContain(
+      'Rough: pooled weekly usage divided by all proxy spend since the earliest weekly window opened ('
+    );
+    expect(markup).toContain('Switches to a measured rate once enough usage is observed.');
+  });
+
+  test('measured and absent method read without "(rough)" and without the rough tooltip', () => {
+    for (const m of ['measured', undefined]) {
+      const markup = render(priced, { quota: withMethod(m) });
+      expect(markup).toContain('≈ 0.8% of weekly quota');
+      expect(markup).not.toContain('(rough)');
+      expect(markup).not.toContain('Rough: pooled');
+    }
+  });
+
+  test('a rough Fable window is not labelled exact', () => {
+    const markup = render(priced, { quota: withMethod('rough', 'rough') });
+    expect(markup).toContain('3.0% Fable weekly (rough)');
+    expect(render(priced, { quota: withMethod('rough', 'measured') })).toContain(
+      '3.0% Fable weekly<'
+    );
+  });
+
+  test('card total sits in its own prominent line under the token total', () => {
+    const markup = render(priced, { quota: withMethod('rough') });
+    const card = markup.slice(0, markup.indexOf('</header>'));
+    expect(card.indexOf('tokens')).toBeLessThan(card.indexOf('of weekly quota'));
+  });
+
+  test('quota block without weekly_all keeps the pending note', () => {
+    const markup = render(priced, { quota: { ...quota, weekly_all: undefined, fable: undefined } });
+    expect(markup).toContain('Quota share appears once enough usage is measured');
   });
 });
