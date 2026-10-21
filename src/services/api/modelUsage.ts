@@ -55,6 +55,8 @@ export interface ModelUsageQuotaWindow {
   /** Accounts feeding the rate; undefined when the server does not say. */
   accountsInRate?: number;
   windowRule: string;
+  /** "rough" until enough usage is observed; absent on the wire means measured. */
+  method: 'rough' | 'measured';
   accounts: ModelUsageQuotaAccount[];
   windowStart: string;
   resetsAt: string;
@@ -127,6 +129,7 @@ const normalizeQuotaWindow = (raw: unknown): ModelUsageQuotaWindow | undefined =
     pctPerUsd: readCount(raw.pct_per_usd),
     accountsInRate: readOptionalCount(raw.accounts_in_rate),
     windowRule: readText(raw.window_rule),
+    method: raw.method === 'rough' ? 'rough' : 'measured',
     accounts,
     windowStart: readText(raw.window_start),
     resetsAt: readText(raw.resets_at),

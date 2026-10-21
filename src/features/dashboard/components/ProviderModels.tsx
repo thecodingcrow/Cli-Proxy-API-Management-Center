@@ -98,11 +98,14 @@ function hintOf(
     lines.push(t('dashboard.models_hint_quota_pending'));
   }
   if (figures.weekly || figures.fable) {
-    lines.push(
-      t('dashboard.models_hint_weekly'),
-      t('dashboard.models_hint_external'),
-      t('dashboard.models_hint_over_100')
-    );
+    if (quota?.weeklyAll?.method === 'rough') {
+      lines.push(
+        t('dashboard.models_hint_rough', { time: formatReset(quota.weeklyAll.windowStart) })
+      );
+    } else {
+      lines.push(t('dashboard.models_hint_weekly'), t('dashboard.models_hint_external'));
+    }
+    lines.push(t('dashboard.models_hint_over_100'));
     lines.push(...windowLines(t, quota?.weeklyAll));
     lines.push(...coverageLines(t, quota?.weeklyAll, quota?.accounts ?? 0));
     if (figures.fable) {
@@ -123,9 +126,11 @@ interface FigureChipsProps {
   source: FigureSource;
   fableScope: boolean;
   provider: ProviderBreakdown;
+  /** Card total: own line under the token total, cost-sized. */
+  prominent?: boolean;
 }
 
-function FigureChips({ source, fableScope, provider }: FigureChipsProps) {
+function FigureChips({ source, fableScope, provider, prominent }: FigureChipsProps) {
   const { t } = useTranslation();
   const figures = figuresOf(source, fableScope);
   const unpriced =
@@ -133,14 +138,29 @@ function FigureChips({ source, fableScope, provider }: FigureChipsProps) {
       ? t('dashboard.models_unpriced_chip', { count: source.unpricedRequests })
       : null;
   if (!figures.cost && !figures.fable && !figures.weekly && !unpriced) return null;
+  const weeklyRough = provider.quota?.weeklyAll?.method === 'rough';
+  const fableRough = provider.quota?.fable?.method === 'rough';
   return (
-    <span className={styles.figures} tabIndex={0} title={hintOf(t, source, figures, provider)}>
+    <span
+      className={prominent ? `${styles.figures} ${styles.headFigures}` : styles.figures}
+      tabIndex={0}
+      title={hintOf(t, source, figures, provider)}
+    >
       {figures.cost && <span className={styles.cost}>{figures.cost}</span>}
       {figures.fable && (
-        <span>{t('dashboard.models_quota_fable', { percent: figures.fable })}</span>
+        <span>
+          {t(fableRough ? 'dashboard.models_quota_fable_rough' : 'dashboard.models_quota_fable', {
+            percent: figures.fable,
+          })}
+        </span>
       )}
       {figures.weekly && (
-        <span>{t('dashboard.models_quota_weekly', { percent: figures.weekly })}</span>
+        <span>
+          {t(
+            weeklyRough ? 'dashboard.models_quota_weekly_rough' : 'dashboard.models_quota_weekly',
+            { percent: figures.weekly }
+          )}
+        </span>
       )}
       {unpriced && !figures.cost && !figures.weekly && !figures.fable && <span>{unpriced}</span>}
     </span>
@@ -194,21 +214,26 @@ export function ProviderModels({ provider, unknownProviderLabel }: ProviderModel
           </span>
         </div>
         <div className={styles.headNumbers}>
+          <div className={styles.headTokens}>
+            {providerSubagentShare > 0 && (
+              <span className={styles.chip}>
+                <i className={styles.swatch} aria-hidden="true" />
+                {t('dashboard.models_subagent_chip', {
+                  percent: formatShare(providerSubagentShare),
+                })}
+              </span>
+            )}
+            <span className={styles.headTotal} title={provider.totalTokens.toLocaleString()}>
+              {formatCompactNumber(provider.totalTokens)}
+            </span>
+            <span className={styles.unit}>{t('dashboard.models_tokens')}</span>
+          </div>
           <FigureChips
             source={provider}
             fableScope={provider.models.some((row) => row.fable)}
             provider={provider}
+            prominent
           />
-          {providerSubagentShare > 0 && (
-            <span className={styles.chip}>
-              <i className={styles.swatch} aria-hidden="true" />
-              {t('dashboard.models_subagent_chip', { percent: formatShare(providerSubagentShare) })}
-            </span>
-          )}
-          <span className={styles.headTotal} title={provider.totalTokens.toLocaleString()}>
-            {formatCompactNumber(provider.totalTokens)}
-          </span>
-          <span className={styles.unit}>{t('dashboard.models_tokens')}</span>
         </div>
       </header>
 

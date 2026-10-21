@@ -231,7 +231,7 @@ describe('ProviderModels cost and quota markup', () => {
   const markup = render(priced, { quota });
 
   test('estimate rows say ≈ weekly, Fable rows say exact Fable weekly', () => {
-    expect(markup).toContain('≈ 0.8% weekly');
+    expect(markup).toContain('≈ 0.8% of weekly quota');
     expect(markup).toContain('3.0% Fable weekly');
     expect(markup).not.toContain('≈ 3.0%');
     expect(markup).toContain('$4.00');
@@ -239,7 +239,7 @@ describe('ProviderModels cost and quota markup', () => {
 
   test('card total shows summed cost and weekly share', () => {
     expect(markup).toContain('$8.00');
-    expect(markup).toContain('≈ 1.8% weekly');
+    expect(markup).toContain('≈ 1.8% of weekly quota');
   });
 
   test('tooltip carries the rules, reset, accounts, partial and unpriced notes', () => {
@@ -288,7 +288,7 @@ describe('ProviderModels reset lines and missing Fable scope', () => {
   test('without quota.fable, Fable-named rows show only the weekly estimate', () => {
     const markup = render(priced, { quota: { ...quota, fable: undefined } });
     expect(markup).not.toContain('% Fable weekly');
-    expect(markup).toContain('≈ 1.0% weekly');
+    expect(markup).toContain('≈ 1.0% of weekly quota');
   });
 });
 
@@ -315,8 +315,8 @@ describe('backend golden response', () => {
     const q = usage.quota!;
     expect(q).toMatchObject({ provider: 'claude', accounts: 2, pooling: 'mean', stale: true });
     expect(q.observedAt).toBe('2025-02-25T21:19:00Z');
-    expect(q.weeklyAll).toMatchObject({ usedPct: 63.5, costUsdMicros: 20100 });
-    expect(q.weeklyAll!.pctPerUsd).toBeCloseTo(3159.2039800995026, 9);
+    expect(q.weeklyAll).toMatchObject({ usedPct: 63.5, costUsdMicros: 240010000 });
+    expect(q.weeklyAll!.pctPerUsd).toBeCloseTo(0.2645723094871047, 9);
     expect(q.weeklyAll!.accounts.map((a) => [a.authIndex, a.usedPct, a.resetsAt])).toEqual([
       ['ia', 27, '2025-03-03T21:20:00Z'],
       ['ib', 100, '2025-02-26T21:20:00Z'],
@@ -328,7 +328,7 @@ describe('backend golden response', () => {
       exact: true,
       baselineAt: '2025-02-24T21:20:00Z',
       baselineUsedPct: 0,
-      costUsdMicros: 18000,
+      costUsdMicros: 180000000,
     });
   });
 
@@ -336,7 +336,7 @@ describe('backend golden response', () => {
     const [claude, codex] = buildModelBreakdown(usage)!.providers;
     expect(claude.id).toBe('claude');
     expect(claude.models.filter((m) => m.fable).map((m) => m.model)).toEqual(['claude-fable-5-1']);
-    expect(claude.costUsd).toBeCloseTo(0.0241, 9);
+    expect(claude.costUsd).toBeCloseTo(280.01, 6);
     expect(claude.quotaFablePct).toBe(10);
     expect(codex.quota).toBeUndefined();
     expect(codex.unpricedRequests).toBe(1);
@@ -356,8 +356,9 @@ describe('backend golden response', () => {
     expect(claude).toContain('account 1: 27.0% used, resets');
     expect(claude).toContain('account 2: 100.0% used, resets');
     expect(claude).toContain('10.0% Fable weekly');
-    expect(claude).toContain('≈ 37.9% weekly');
-    expect(claude).toContain('&lt;$0.01');
+    expect(claude).toContain('≈ 31.7% of weekly quota');
+    expect(claude).toContain('$120.00');
+    expect(claude).toContain('$280.01');
     expect(claude).toContain('Quota data is stale.');
     expect(html(providers[1])).toContain('1 unpriced');
   });
@@ -428,7 +429,128 @@ describe('rate coverage', () => {
       quota: { ...quota, weekly_all: undefined, fable: undefined },
     });
     expect(markup).toContain('$3.00');
-    expect(markup).not.toContain('weekly</span>');
+    expect(markup).not.toContain('of weekly quota');
     expect(markup.match(/Quota share appears once enough usage is measured/g)).toHaveLength(1);
+  });
+});
+
+describe('rough vs measured weekly share', () => {
+  const withMethod = (method?: string, fableMethod?: string) => ({
+    ...quota,
+    weekly_all: {
+      used_pct: 41.5,
+      cost_usd_micros: 1,
+      pct_per_usd: 0.5,
+      ...(method ? { method } : {}),
+      window_start: '2026-10-19T07:00:00Z',
+      accounts: [account('1', { exact: false }), account('2', { exact: false })],
+    },
+    fable: { ...quota.fable, ...(fableMethod ? { method: fableMethod } : {}) },
+  });
+
+  test('normalises method; absent means measured', () => {
+    const q = (m?: string) =>
+      normalizeModelUsage(payload([row({})], { quota: withMethod(m) }))!.quota!;
+    expect(q('rough').weeklyAll!.method).toBe('rough');
+    expect(q('measured').weeklyAll!.method).toBe('measured');
+    expect(q().weeklyAll!.method).toBe('measured');
+    expect(q('bogus').weeklyAll!.method).toBe('measured');
+  });
+
+  test('rough rows and card read "(rough)" with the explanation tooltip', () => {
+    const markup = render(priced, { quota: withMethod('rough') });
+    expect(markup).toContain('≈ 0.8% of weekly quota (rough)');
+    expect(markup).toContain('≈ 1.8% of weekly quota (rough)');
+    expect(markup).toContain(
+      'Rough: pooled weekly usage divided by all proxy spend since the earliest weekly window opened ('
+    );
+    expect(markup).toContain('Switches to a measured rate once enough usage is observed.');
+  });
+
+  test('measured and absent method read without "(rough)" and without the rough tooltip', () => {
+    for (const m of ['measured', undefined]) {
+      const markup = render(priced, { quota: withMethod(m) });
+      expect(markup).toContain('≈ 0.8% of weekly quota');
+      expect(markup).not.toContain('(rough)');
+      expect(markup).not.toContain('Rough: pooled');
+    }
+  });
+
+  test('a rough Fable window is not labelled exact', () => {
+    const markup = render(priced, { quota: withMethod('rough', 'rough') });
+    expect(markup).toContain('3.0% Fable weekly (rough)');
+    expect(render(priced, { quota: withMethod('rough', 'measured') })).toContain(
+      '3.0% Fable weekly<'
+    );
+  });
+
+  test('card total sits in its own prominent line under the token total', () => {
+    const markup = render(priced, { quota: withMethod('rough') });
+    const card = markup.slice(0, markup.indexOf('</header>'));
+    expect(card.indexOf('tokens')).toBeLessThan(card.indexOf('of weekly quota'));
+  });
+
+  test('quota block without weekly_all keeps the pending note', () => {
+    const markup = render(priced, { quota: { ...quota, weekly_all: undefined, fable: undefined } });
+    expect(markup).toContain('Quota share appears once enough usage is measured');
+  });
+});
+
+describe('backend golden responses by method', () => {
+  const load = (name: string) =>
+    JSON.parse(readFileSync(new URL(`./fixtures/${name}`, import.meta.url), 'utf8'));
+  const html = (golden: unknown) => {
+    const claude = buildModelBreakdown(normalizeModelUsage(golden))!.providers[0];
+    return renderToStaticMarkup(
+      createElement(
+        I18nextProvider,
+        { i18n: testI18n },
+        createElement(ProviderModels, { provider: claude, unknownProviderLabel: 'Unknown' })
+      )
+    );
+  };
+
+  test('measured golden carries method on both windows and renders without "(rough)"', () => {
+    const golden = load('models-quota.golden.json');
+    const q = normalizeModelUsage(golden)!.quota!;
+    expect([q.weeklyAll!.method, q.fable!.method]).toEqual(['measured', 'measured']);
+    const markup = html(golden);
+    expect(markup).toContain('of weekly quota');
+    expect(markup).not.toContain('(rough)');
+  });
+
+  test('rough golden: sub-block window, accounts without cost or baseline, in-rate count', () => {
+    const q = normalizeModelUsage(load('models-quota-rough.golden.json'))!.quota!;
+    expect(q.fable).toBeUndefined();
+    expect(q.weeklyAll).toMatchObject({
+      method: 'rough',
+      windowStart: '2026-10-15T12:00:00Z',
+      usedPct: 64.5,
+      accountsInRate: 2,
+    });
+    expect(q.weeklyAll!.accounts).toHaveLength(2);
+    for (const a of q.weeklyAll!.accounts) {
+      expect(a.exact).toBe(false);
+      expect(a.baselineUsedPct).toBeUndefined();
+      expect(a.baselineAt).toBe('');
+      expect(a.costUsdMicros).toBe(0);
+    }
+  });
+
+  test('rough golden: every row field read; card shows the rough line under the tokens', () => {
+    const golden = load('models-quota-rough.golden.json');
+    const usage = normalizeModelUsage(golden)!;
+    expect(usage.models.map((m) => m.quotaWeeklyPct)).toEqual(
+      golden.models.map((m: { quota_weekly_pct?: number }) => m.quota_weekly_pct)
+    );
+    const markup = html(golden);
+    const card = markup.slice(0, markup.indexOf('</header>'));
+    expect(card).toContain('≈ 64.5% of weekly quota (rough)');
+    expect(card.indexOf('tokens')).toBeLessThan(card.indexOf('(rough)'));
+    expect(card).toContain('$1,199');
+    expect(card).toContain('Rough: pooled weekly usage divided by all proxy spend');
+    expect(card).toContain('account 1: 29.0% used, resets');
+    expect(card).not.toContain('rate so far');
+    expect(markup).toContain('≈ 59.1% of weekly quota (rough)');
   });
 });
