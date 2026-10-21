@@ -315,8 +315,8 @@ describe('backend golden response', () => {
     const q = usage.quota!;
     expect(q).toMatchObject({ provider: 'claude', accounts: 2, pooling: 'mean', stale: true });
     expect(q.observedAt).toBe('2025-02-25T21:19:00Z');
-    expect(q.weeklyAll).toMatchObject({ usedPct: 63.5, costUsdMicros: 20100 });
-    expect(q.weeklyAll!.pctPerUsd).toBeCloseTo(3159.2039800995026, 9);
+    expect(q.weeklyAll).toMatchObject({ usedPct: 63.5, costUsdMicros: 240010000 });
+    expect(q.weeklyAll!.pctPerUsd).toBeCloseTo(0.2645723094871047, 9);
     expect(q.weeklyAll!.accounts.map((a) => [a.authIndex, a.usedPct, a.resetsAt])).toEqual([
       ['ia', 27, '2025-03-03T21:20:00Z'],
       ['ib', 100, '2025-02-26T21:20:00Z'],
@@ -328,7 +328,7 @@ describe('backend golden response', () => {
       exact: true,
       baselineAt: '2025-02-24T21:20:00Z',
       baselineUsedPct: 0,
-      costUsdMicros: 18000,
+      costUsdMicros: 180000000,
     });
   });
 
@@ -336,7 +336,7 @@ describe('backend golden response', () => {
     const [claude, codex] = buildModelBreakdown(usage)!.providers;
     expect(claude.id).toBe('claude');
     expect(claude.models.filter((m) => m.fable).map((m) => m.model)).toEqual(['claude-fable-5-1']);
-    expect(claude.costUsd).toBeCloseTo(0.0241, 9);
+    expect(claude.costUsd).toBeCloseTo(280.01, 6);
     expect(claude.quotaFablePct).toBe(10);
     expect(codex.quota).toBeUndefined();
     expect(codex.unpricedRequests).toBe(1);
@@ -356,8 +356,9 @@ describe('backend golden response', () => {
     expect(claude).toContain('account 1: 27.0% used, resets');
     expect(claude).toContain('account 2: 100.0% used, resets');
     expect(claude).toContain('10.0% Fable weekly');
-    expect(claude).toContain('≈ 37.9% of weekly quota');
-    expect(claude).toContain('&lt;$0.01');
+    expect(claude).toContain('≈ 31.7% of weekly quota');
+    expect(claude).toContain('$120.00');
+    expect(claude).toContain('$280.01');
     expect(claude).toContain('Quota data is stale.');
     expect(html(providers[1])).toContain('1 unpriced');
   });
