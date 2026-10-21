@@ -457,10 +457,11 @@ describe('rough vs measured weekly share', () => {
     expect(q('bogus').weeklyAll!.method).toBe('measured');
   });
 
-  test('rough rows and card read "(rough)" with the explanation tooltip', () => {
+  test('rough qualifier on the card total only, rows keep "≈", with the explanation tooltip', () => {
     const markup = render(priced, { quota: withMethod('rough') });
-    expect(markup).toContain('≈ 0.8% of weekly quota (rough)');
     expect(markup).toContain('≈ 1.8% of weekly quota (rough)');
+    expect(markup).toContain('≈ 0.8% of weekly quota<');
+    expect(markup.match(/\(rough\)/g)).toHaveLength(1);
     expect(markup).toContain(
       'Rough: pooled weekly usage divided by all proxy spend since the earliest weekly window opened ('
     );
@@ -478,7 +479,9 @@ describe('rough vs measured weekly share', () => {
 
   test('a rough Fable window is not labelled exact', () => {
     const markup = render(priced, { quota: withMethod('rough', 'rough') });
-    expect(markup).toContain('3.0% Fable weekly (rough)');
+    expect(markup).toContain('≈ 3.0% Fable weekly (rough)');
+    expect(markup).toContain('≈ 3.0% Fable weekly<');
+    expect(markup.match(/\(rough\)/g)).toHaveLength(2);
     expect(render(priced, { quota: withMethod('rough', 'measured') })).toContain(
       '3.0% Fable weekly<'
     );
@@ -551,6 +554,109 @@ describe('backend golden responses by method', () => {
     expect(card).toContain('Rough: pooled weekly usage divided by all proxy spend');
     expect(card).toContain('account 1: 29.0% used, resets');
     expect(card).not.toContain('rate so far');
-    expect(markup).toContain('≈ 59.1% of weekly quota (rough)');
+    expect(markup).toContain('≈ 59.1% of weekly quota<');
+    expect(markup.match(/\(rough\)/g)).toHaveLength(1);
+  });
+});
+
+describe('carried rate', () => {
+  const carried = (over: Record<string, unknown> = {}) => ({
+    ...quota,
+    weekly_all: {
+      method: 'carried',
+      used_pct: 20,
+      cost_usd_micros: 1,
+      pct_per_usd: 0.5,
+      accounts_in_rate: 2,
+      accounts: [
+        account('1', { exact: false, fit_pct_per_usd: 0.4, fitted_at: '2026-10-20T10:00:00Z' }),
+        account('2', { exact: false, fit_pct_per_usd: 0.6, fitted_at: '2026-10-21T10:00:00Z' }),
+      ],
+      ...over,
+    },
+    fable: undefined,
+  });
+
+  test('normalises method, fit rate and fit time; latest fit dates the block', () => {
+    const w = normalizeModelUsage(payload([row({})], { quota: carried() }))!.quota!.weeklyAll!;
+    expect(w.method).toBe('carried');
+    expect(w.accounts[0]).toMatchObject({
+      exact: false,
+      fitPctPerUsd: 0.4,
+      fittedAt: '2026-10-20T10:00:00Z',
+    });
+    expect(w.accounts[0].baselineUsedPct).toBeUndefined();
+    expect(w.fittedAt).toBe('2026-10-21T10:00:00Z');
+    expect(
+      normalizeModelUsage(
+        payload([row({})], { quota: carried({ fitted_at: '2026-10-19T00:00:00Z' }) })
+      )!.quota!.weeklyAll!.fittedAt
+    ).toBe('2026-10-19T00:00:00Z');
+  });
+
+  test('card carries the date qualifier, rows keep only "≈"', () => {
+    const markup = render(priced, { quota: carried() });
+    expect(markup.match(/of weekly quota \(from [^)]*Oct[^)]*\)/g)).toHaveLength(1);
+    expect(markup).toContain('≈ 1.8% of weekly quota (from');
+    expect(markup).toContain('≈ 0.8% of weekly quota<');
+    expect(markup).not.toContain('(rough)');
+  });
+
+  test('tooltip: carried explanation and per-account fit dates', () => {
+    const markup = render(priced, { quota: carried() });
+    expect(markup).toMatch(
+      /Rate measured earlier \([^)]*Oct[^)]*\) and carried over this week&#x27;s reset; switches to this week&#x27;s measured rate once it qualifies\./
+    );
+    expect(markup).toMatch(/account 1: 27\.0% used, rate fitted [^\n"]*Oct/);
+    expect(markup).toMatch(/account 2: 27\.0% used, rate fitted/);
+    expect(markup).not.toContain('Rough: pooled');
+  });
+
+  test('carried Fable window is not labelled exact', () => {
+    const markup = render(priced, {
+      quota: {
+        ...carried(),
+        fable: { ...quota.fable, method: 'carried', fitted_at: '2026-10-20T10:00:00Z' },
+      },
+    });
+    expect(markup).toContain('≈ 3.0% Fable weekly (from');
+    expect(markup).toContain('≈ 3.0% Fable weekly<');
+  });
+});
+
+describe('carried golden response', () => {
+  const golden = JSON.parse(
+    readFileSync(new URL('./fixtures/models-quota-carried.golden.json', import.meta.url), 'utf8')
+  );
+
+  test('normalises the carried window; no field dropped', () => {
+    const w = normalizeModelUsage(golden)!.quota!.weeklyAll!;
+    expect(w).toMatchObject({
+      method: 'carried',
+      usedPct: 1,
+      accountsInRate: 1,
+      fittedAt: '2025-02-19T21:20:00Z',
+    });
+    expect(w.accounts[0]).toMatchObject({
+      exact: false,
+      fitPctPerUsd: 0.05004170141784821,
+      fittedAt: '2025-02-19T21:20:00Z',
+    });
+    expect(w.accounts[0].baselineUsedPct).toBeUndefined();
+  });
+
+  test('card shows the dated qualifier once, rows only "≈", tooltip names the fit date', () => {
+    const provider = buildModelBreakdown(normalizeModelUsage(golden))!.providers[0];
+    const markup = renderToStaticMarkup(
+      createElement(
+        I18nextProvider,
+        { i18n: testI18n },
+        createElement(ProviderModels, { provider, unknownProviderLabel: 'Unknown' })
+      )
+    );
+    expect(markup.match(/\(from [^)]*Feb[^)]*\)/g)).toHaveLength(1);
+    expect(markup).toContain('≈ 60.0% of weekly quota (from');
+    expect(markup).toContain('Rate measured earlier (');
+    expect(markup).toMatch(/account 1: 1\.0% used, rate fitted [^\n"]*Feb/);
   });
 });
