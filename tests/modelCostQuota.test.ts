@@ -623,3 +623,40 @@ describe('carried rate', () => {
     expect(markup).toContain('≈ 3.0% Fable weekly<');
   });
 });
+
+describe('carried golden response', () => {
+  const golden = JSON.parse(
+    readFileSync(new URL('./fixtures/models-quota-carried.golden.json', import.meta.url), 'utf8')
+  );
+
+  test('normalises the carried window; no field dropped', () => {
+    const w = normalizeModelUsage(golden)!.quota!.weeklyAll!;
+    expect(w).toMatchObject({
+      method: 'carried',
+      usedPct: 1,
+      accountsInRate: 1,
+      fittedAt: '2025-02-19T21:20:00Z',
+    });
+    expect(w.accounts[0]).toMatchObject({
+      exact: false,
+      fitPctPerUsd: 0.05004170141784821,
+      fittedAt: '2025-02-19T21:20:00Z',
+    });
+    expect(w.accounts[0].baselineUsedPct).toBeUndefined();
+  });
+
+  test('card shows the dated qualifier once, rows only "≈", tooltip names the fit date', () => {
+    const provider = buildModelBreakdown(normalizeModelUsage(golden))!.providers[0];
+    const markup = renderToStaticMarkup(
+      createElement(
+        I18nextProvider,
+        { i18n: testI18n },
+        createElement(ProviderModels, { provider, unknownProviderLabel: 'Unknown' })
+      )
+    );
+    expect(markup.match(/\(from [^)]*Feb[^)]*\)/g)).toHaveLength(1);
+    expect(markup).toContain('≈ 60.0% of weekly quota (from');
+    expect(markup).toContain('Rate measured earlier (');
+    expect(markup).toMatch(/account 1: 1\.0% used, rate fitted [^\n"]*Feb/);
+  });
+});
