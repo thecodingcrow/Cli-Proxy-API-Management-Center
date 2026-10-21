@@ -494,3 +494,62 @@ describe('rough vs measured weekly share', () => {
     expect(markup).toContain('Quota share appears once enough usage is measured');
   });
 });
+
+describe('backend golden responses by method', () => {
+  const load = (name: string) =>
+    JSON.parse(readFileSync(new URL(`./fixtures/${name}`, import.meta.url), 'utf8'));
+  const html = (golden: unknown) => {
+    const claude = buildModelBreakdown(normalizeModelUsage(golden))!.providers[0];
+    return renderToStaticMarkup(
+      createElement(
+        I18nextProvider,
+        { i18n: testI18n },
+        createElement(ProviderModels, { provider: claude, unknownProviderLabel: 'Unknown' })
+      )
+    );
+  };
+
+  test('measured golden carries method on both windows and renders without "(rough)"', () => {
+    const golden = load('models-quota.golden.json');
+    const q = normalizeModelUsage(golden)!.quota!;
+    expect([q.weeklyAll!.method, q.fable!.method]).toEqual(['measured', 'measured']);
+    const markup = html(golden);
+    expect(markup).toContain('of weekly quota');
+    expect(markup).not.toContain('(rough)');
+  });
+
+  test('rough golden: sub-block window, accounts without cost or baseline, in-rate count', () => {
+    const q = normalizeModelUsage(load('models-quota-rough.golden.json'))!.quota!;
+    expect(q.fable).toBeUndefined();
+    expect(q.weeklyAll).toMatchObject({
+      method: 'rough',
+      windowStart: '2026-10-15T12:00:00Z',
+      usedPct: 64.5,
+      accountsInRate: 2,
+    });
+    expect(q.weeklyAll!.accounts).toHaveLength(2);
+    for (const a of q.weeklyAll!.accounts) {
+      expect(a.exact).toBe(false);
+      expect(a.baselineUsedPct).toBeUndefined();
+      expect(a.baselineAt).toBe('');
+      expect(a.costUsdMicros).toBe(0);
+    }
+  });
+
+  test('rough golden: every row field read; card shows the rough line under the tokens', () => {
+    const golden = load('models-quota-rough.golden.json');
+    const usage = normalizeModelUsage(golden)!;
+    expect(usage.models.map((m) => m.quotaWeeklyPct)).toEqual(
+      golden.models.map((m: { quota_weekly_pct?: number }) => m.quota_weekly_pct)
+    );
+    const markup = html(golden);
+    const card = markup.slice(0, markup.indexOf('</header>'));
+    expect(card).toContain('≈ 64.5% of weekly quota (rough)');
+    expect(card.indexOf('tokens')).toBeLessThan(card.indexOf('(rough)'));
+    expect(card).toContain('$1,199');
+    expect(card).toContain('Rough: pooled weekly usage divided by all proxy spend');
+    expect(card).toContain('account 1: 29.0% used, resets');
+    expect(card).not.toContain('rate so far');
+    expect(markup).toContain('≈ 59.1% of weekly quota (rough)');
+  });
+});
